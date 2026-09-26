@@ -57,6 +57,8 @@ class OfficialBookDTO(BaseModel):
     title: str | None = None
     authors: list[str] = Field(default_factory=list)
     description: str | None = None
+    readStatus: str | None = None
+    personalRating: int | float | None = None
     primaryFile: OfficialBookFileDTO | None = None
     files: list[OfficialBookFileDTO] = Field(default_factory=list)
     metadata: dict[str, Any] | None = None
