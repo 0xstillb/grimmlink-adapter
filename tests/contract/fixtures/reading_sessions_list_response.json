@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "bookId": 42,
+    "bookTitle": "The Count of Monte Cristo",
+    "bookType": "EPUB",
+    "startTime": "2026-09-25T14:00:00Z",
+    "endTime": "2026-09-25T15:00:00Z",
+    "durationSeconds": 3600,
+    "startProgress": 40.0,
+    "endProgress": 42.5,
+    "progressDelta": 2.5,
+    "startLocation": "/6/4[chap03]!/4/2/8/1:0",
+    "endLocation": "/6/4[chap03]!/4/2/10/1:24",
+    "createdAt": "2026-09-25T15:00:05"
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "shelfId": 1,
+  "bookId": 42,
+  "shelfType": "regular",
+  "removed": true,
+  "status": "removed",
+  "message": "Shelf membership removed"
+}

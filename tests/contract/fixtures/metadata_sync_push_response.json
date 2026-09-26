@@ -1,0 +1,28 @@
+{
+  "bookId": 42,
+  "ok": true,
+  "results": {
+    "rating": {
+      "type": "RATING",
+      "dedupeKey": "rating:42:koreader",
+      "status": "SUCCESS",
+      "id": "rating-42"
+    },
+    "annotations": [
+      {
+        "type": "ANNOTATION",
+        "dedupeKey": "d41d8cd98f00b204e9800998ecf8427e:annotation:1:pos0:hash",
+        "status": "SUCCESS",
+        "id": "ann-101"
+      }
+    ],
+    "bookmarks": [
+      {
+        "type": "BOOKMARK",
+        "dedupeKey": "bookmark:42:500",
+        "status": "SUCCESS",
+        "id": "bm-202"
+      }
+    ]
+  }
+}

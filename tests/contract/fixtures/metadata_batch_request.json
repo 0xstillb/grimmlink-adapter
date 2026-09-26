@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "syncMode": "incremental",
+  "bookId": 42,
+  "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+  "bookFileId": 101,
+  "fileFormat": "EPUB",
+  "device": "Kobo Clara 2E",
+  "deviceId": "kobo-uuid-12345",
+  "timestamp": "2026-09-25T15:00:00Z",
+  "since": "2026-09-20T00:00:00Z",
+  "cursor": "2026-09-20T00:00:00Z",
+  "limit": 50,
+  "rating": {
+    "dedupeKey": "rating:42:koreader",
+    "value": 8,
+    "scale": 10,
+    "source": "koreader",
+    "updatedAt": "2026-09-25T15:00:00Z"
+  },
+  "annotations": [],
+  "bookmarks": []
+}

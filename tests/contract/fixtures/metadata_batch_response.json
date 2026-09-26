@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "push": {
+    "bookId": 42,
+    "ok": true,
+    "results": {
+      "rating": {
+        "type": "RATING",
+        "dedupeKey": "rating:42:koreader",
+        "status": "SUCCESS",
+        "id": "rating-42"
+      },
+      "annotations": [],
+      "bookmarks": []
+    }
+  },
+  "pull": {
+    "bookId": 42,
+    "bookFileId": 101,
+    "ok": true,
+    "since": "2026-09-20T00:00:00Z",
+    "nextCursor": "2026-09-25T15:00:00Z",
+    "limit": 50,
+    "items": []
+  }
+}

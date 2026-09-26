@@ -1,0 +1,18 @@
+{
+  "bookId": 42,
+  "bookType": "EPUB",
+  "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+  "device": "Kobo Clara 2E",
+  "deviceId": "kobo-uuid-12345",
+  "startTime": "2026-09-25T14:00:00Z",
+  "endTime": "2026-09-25T15:00:00Z",
+  "durationSeconds": 3600,
+  "durationFormatted": "1:00:00",
+  "startProgress": 40.0,
+  "endProgress": 42.5,
+  "progressDelta": 2.5,
+  "startLocation": "/6/4[chap03]!/4/2/8/1:0",
+  "endLocation": "/6/4[chap03]!/4/2/10/1:24",
+  "currentPage": 120,
+  "totalPages": 300
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Fantasy Classics",
+    "type": "regular",
+    "visibility": "personal",
+    "bookCount": 15,
+    "description": null
+  },
+  {
+    "id": 2,
+    "name": "Public Sci-Fi",
+    "type": "regular",
+    "visibility": "public",
+    "bookCount": 42,
+    "description": null
+  },
+  {
+    "id": 100,
+    "name": "Unread High Fantasy",
+    "type": "magic",
+    "visibility": "personal",
+    "bookCount": 8,
+    "description": "Rule-based Magic Shelf"
+  }
+]

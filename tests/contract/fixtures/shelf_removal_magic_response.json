@@ -1,0 +1,8 @@
+{
+  "shelfId": 100,
+  "bookId": 42,
+  "shelfType": "magic",
+  "removed": false,
+  "status": "unsupported",
+  "message": "Magic Shelf is rule-based and cannot be manually removed from"
+}

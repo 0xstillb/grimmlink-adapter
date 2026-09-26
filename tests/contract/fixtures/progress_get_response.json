@@ -1,0 +1,15 @@
+{
+  "timestamp": 1774526400,
+  "bookId": 42,
+  "bookFileId": 101,
+  "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+  "document": "d41d8cd98f00b204e9800998ecf8427e",
+  "fileFormat": "EPUB",
+  "percentage": 42.5,
+  "progress": "/6/4[chap03]!/4/2/10/1:24",
+  "location": "/6/4[chap03]!/4/2/10/1:24",
+  "currentPage": null,
+  "updatedAt": "2026-09-25T12:00:00Z",
+  "device": "Kobo Clara 2E",
+  "device_id": "kobo-uuid-12345"
+}

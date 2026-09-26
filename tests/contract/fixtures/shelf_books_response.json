@@ -1,0 +1,32 @@
+[
+  {
+    "bookId": 42,
+    "bookFileId": 101,
+    "title": "The Count of Monte Cristo",
+    "author": "Alexandre Dumas",
+    "fileName": "The Count of Monte Cristo.epub",
+    "originalFileName": "The Count of Monte Cristo.epub",
+    "extension": "epub",
+    "fileFormat": "EPUB",
+    "fileSizeKb": 1250,
+    "fileSize": 1280000,
+    "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+    "seriesName": "Classics",
+    "seriesNumber": 1.0
+  },
+  {
+    "bookId": 43,
+    "bookFileId": 102,
+    "title": "The Three Musketeers",
+    "author": "Alexandre Dumas",
+    "fileName": "The Three Musketeers.epub",
+    "originalFileName": "The Three Musketeers.epub",
+    "extension": "epub",
+    "fileFormat": "EPUB",
+    "fileSizeKb": 980,
+    "fileSize": 1003520,
+    "bookHash": "098f6bcd4621d373cade4e832627b4f6",
+    "seriesName": "D'Artagnan Romances",
+    "seriesNumber": 1.0
+  }
+]

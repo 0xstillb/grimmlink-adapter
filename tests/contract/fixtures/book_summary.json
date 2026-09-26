@@ -1,0 +1,15 @@
+{
+  "bookId": 42,
+  "bookFileId": 101,
+  "title": "The Count of Monte Cristo",
+  "author": "Alexandre Dumas",
+  "fileName": "The Count of Monte Cristo.epub",
+  "originalFileName": "The Count of Monte Cristo.epub",
+  "extension": "epub",
+  "fileFormat": "EPUB",
+  "fileSizeKb": 1250,
+  "fileSize": 1280000,
+  "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+  "seriesName": "Classics",
+  "seriesNumber": 1.0
+}

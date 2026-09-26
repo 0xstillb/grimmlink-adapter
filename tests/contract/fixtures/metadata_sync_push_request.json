@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "syncMode": "push",
+  "bookId": 42,
+  "bookHash": "d41d8cd98f00b204e9800998ecf8427e",
+  "bookFileId": 101,
+  "fileFormat": "EPUB",
+  "device": "Kobo Clara 2E",
+  "deviceId": "kobo-uuid-12345",
+  "timestamp": "2026-09-25T15:00:00Z",
+  "rating": {
+    "dedupeKey": "rating:42:koreader",
+    "value": 8,
+    "scale": 10,
+    "source": "koreader",
+    "updatedAt": "2026-09-25T15:00:00Z"
+  },
+  "annotations": [
+    {
+      "dedupeKey": "d41d8cd98f00b204e9800998ecf8427e:annotation:1:pos0:hash",
+      "type": "highlight",
+      "text": "All human wisdom is contained in these two words: Wait and Hope.",
+      "note": "Memorable quote",
+      "color": "#FFEB3B",
+      "drawer": "lighten",
+      "style": "highlight",
+      "chapter": "Chapter 117",
+      "page": 500,
+      "location": {
+        "pos0": "/6/4[chap117]!/4/2/10/1:0",
+        "pos1": "/6/4[chap117]!/4/2/10/1:64",
+        "pageno": 500,
+        "cfi": "epubcfi(/6/4[chap117]!/4/2/10/1:0)",
+        "raw": "/6/4[chap117]!/4/2/10/1:0"
+      },
+      "createdAt": "2026-09-25T14:50:00Z",
+      "updatedAt": "2026-09-25T15:00:00Z"
+    }
+  ],
+  "bookmarks": [
+    {
+      "dedupeKey": "bookmark:42:500",
+      "title": "Important bookmark",
+      "notes": "Re-read this section",
+      "chapter": "Chapter 117",
+      "page": 500,
+      "location": {
+        "pos0": "/6/4[chap117]!/4/2/10/1:0",
+        "pageno": 500,
+        "cfi": "epubcfi(/6/4[chap117]!/4/2/10/1:0)"
+      },
+      "createdAt": "2026-09-25T14:50:00Z",
+      "updatedAt": "2026-09-25T15:00:00Z",
+      "deleted": false
+    }
+  ]
+}

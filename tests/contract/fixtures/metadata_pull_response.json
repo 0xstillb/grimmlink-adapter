@@ -1,0 +1,43 @@
+{
+  "bookId": 42,
+  "bookFileId": 101,
+  "ok": true,
+  "since": "2026-09-20T00:00:00Z",
+  "nextCursor": "2026-09-25T15:00:00Z",
+  "limit": 50,
+  "items": [
+    {
+      "id": "grimmory-personal-rating",
+      "type": "rating",
+      "bookId": 42,
+      "bookFileId": 101,
+      "dedupeKey": "grimmory-personal-rating:8",
+      "payload": {
+        "value": 8,
+        "scale": 10,
+        "source": "grimmory-web"
+      },
+      "device": "Grimmory Web",
+      "updatedAt": "2026-09-25T15:00:00Z"
+    },
+    {
+      "id": "item-ann-1",
+      "type": "annotation",
+      "bookId": 42,
+      "bookFileId": 101,
+      "dedupeKey": "d41d8cd98f00b204e9800998ecf8427e:annotation:1:pos0:hash",
+      "contentHash": "abc123hash",
+      "payload": {
+        "text": "All human wisdom is contained in these two words: Wait and Hope.",
+        "note": "Memorable quote",
+        "color": "#FFEB3B",
+        "style": "highlight",
+        "chapter": "Chapter 117",
+        "page": 500
+      },
+      "updatedAt": "2026-09-25T15:00:00Z",
+      "device": "Kobo Clara 2E",
+      "deviceId": "kobo-uuid-12345"
+    }
+  ]
+}

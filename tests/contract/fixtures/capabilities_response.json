@@ -1,0 +1,9 @@
+{
+  "apiVersion": "v1",
+  "webUiProgress": true,
+  "progressSync": true,
+  "pdfBridge": false,
+  "readingSessions": true,
+  "metadataSync": true,
+  "shelves": true
+}

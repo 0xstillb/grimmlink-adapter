@@ -1,0 +1,10 @@
+{
+  "statuses": [
+    "UNREAD",
+    "READING",
+    "READ",
+    "PAUSED",
+    "ABANDONED",
+    "RE_READING"
+  ]
+}
