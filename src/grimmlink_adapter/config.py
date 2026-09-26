@@ -42,6 +42,16 @@ class Settings(BaseSettings):
         default=3, description="Maximum retry count for idempotent upstream requests"
     )
 
+    # OPF Ingestion & Fallback options (Session 03A)
+    METADATA_INGESTION_MODE: str = Field(
+        default="api_preferred",
+        description="Metadata ingestion mode: api_only, api_preferred, sidecar_only",
+    )
+    METADATA_FALLBACK: str = Field(
+        default="sidecar",
+        description="Metadata fallback strategy: sidecar or none",
+    )
+
     @property
     def sqlite_db_path_resolved(self) -> Path:
         """Return resolved Path to the SQLite DB, ensuring parent directory exists."""

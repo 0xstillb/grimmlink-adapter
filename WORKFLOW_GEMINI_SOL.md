@@ -43,6 +43,7 @@ session หลัง ๆ จะสร้างบนฐานที่ผิด�
 | 01 Contract freeze | Gemini Flash 3.8 | Sol contract completeness review |
 | 02 Auth/JWT/MD5 | Gemini Flash 3.8 | **Sol deep review** |
 | 03 Hash → bookId | Gemini Flash 3.8 | **Sol deep review** |
+| 03A OPF ingestion | Gemini Flash 3.8 | **Sol deep review** |
 | 04 Shelf read | Gemini Flash 3.8 | Sol review |
 | 05 Shelf mutation/cleanup | Gemini Flash 3.8 | **Sol safety review** |
 | 06 EPUB/PDF progress | Gemini implements locked spec | **Sol deep progress review** |
@@ -69,3 +70,23 @@ session หลัง ๆ จะสร้างบนฐานที่ผิด�
 - PDF page/progress/conflict semantics must be preserved.
 - Metadata/session retries must be idempotent.
 - Fork state must be exported/verified before retirement.
+
+
+## OPF ingestion architecture
+
+หลัง Session 03 Book Identity ให้ทำ Session 03A:
+
+```text
+OPF
+ ↓
+Adapter parser/normalizer
+ ↓
+Exact bookId
+ ↓
+Official Metadata API (PRIMARY)
+ ↓ failure under approved fallback conditions only
+Official-compatible .metadata.json/.cover.jpg (FALLBACK)
+```
+
+Sidecar fallback ต้องไม่ถูกใช้เพื่อกลบ identity/auth/lock errors.
+

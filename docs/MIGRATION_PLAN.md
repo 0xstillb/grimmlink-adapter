@@ -27,6 +27,7 @@ This document specifies the complete 13-session roadmap to transition GrimmLink 
 | **01** | **Contract Freeze** | Legacy wire contract specification, executable contract tests, fixtures | Gemini Flash 3.8 | Sol Contract Completeness Review |
 | **02** | **Auth & Official Client** | MD5-to-Bearer token bridge, KOReader auth, TokenCache | Gemini Flash 3.8 | **Sol Deep Auth Review** |
 | **03** | **Book Identity** | Hash-to-bookId resolution, accessible library check, BookHashCache | Gemini Flash 3.8 | **Sol Deep Hash Review** |
+| **03A** | **OPF Metadata Ingestion** | Calibre metadata.opf/adjacent scan, Official API primary + Sidecar JSON fallback | Gemini Flash 3.8 | **Sol Deep OPF Review** |
 | **04** | **Shelf Read Sync** | Regular shelves + Magic shelves pagination and aggregation | Gemini Flash 3.8 | Sol Shelf Review |
 | **05** | **Shelf Mutation & Cleanup** | Bulk assignment, Magic shelf read-only rule, multi-shelf file safety | Gemini Flash 3.8 | **Sol Safety Review** |
 | **06** | **Progress Normalization** | EPUB CFI/XPointer authoritative, page ratio calculation (55/16653 ≈ 0.33%), PDF projection | Gemini Flash 3.8 | **Sol Deep Progress Review** |

@@ -1,130 +1,72 @@
-# GrimmLink Adapter
+# GrimmLink → Official Grimmory Migration Prompt Pack
 
-Standalone compatibility adapter bridging the [GrimmLink](https://github.com/0xstillb/GrimmLink) KOReader plugin to **stock [Official Grimmory](https://github.com/grimmory-tools/grimmory)** via standard HTTP/JSON APIs.
+## Execution model — recommended
 
----
+ใช้ **Gemini Flash 3.8 เป็น implementer หลัก** และใช้ **GPT-5.6 Sol High เป็น review gate ระหว่าง session** ไม่ใช่รอตรวจทีเดียวตอนท้าย
 
-## 1. Overview & Architecture
+- Gemini: inspect → implement → test → update HANDOFF → STOP before merge
+- Sol: review architecture/semantics/data safety → APPROVE or FIX_REQUIRED
+- Session 02/03/05/06/07/08/09/10/11 เป็น deep-review gates
+- ดู `WORKFLOW_GEMINI_SOL.md` และ `SOL_REVIEW_TEMPLATE.md`
 
-Historically, GrimmLink interacted with a customized Grimmory fork (`0xstillb/grimmory`) that included a dedicated Spring Boot namespace (`/api/grimmlink/v1`) with custom database tables (`grimmlink_metadata_items`, flyway migrations V9001/V9002), MD5 auth headers, and specialized batch endpoints.
 
-**GrimmLink Adapter** removes all custom server-side fork code and allows running **unmodified, stock Official Grimmory** (`grimmory-tools/grimmory:v3.5.0+`).
+เป้าหมาย: ย้าย GrimmLink ออกจาก Grimmory fork โดย **ไม่แก้ Official Grimmory**, ไม่เขียน DB โดยตรง และรักษา behavior สำคัญของ fork ให้ครบ
 
-```text
-+-------------------------+
-|   KOReader / GrimmLink   |
-|   (Existing Plugin)     |
-+------------+------------+
-             |
-             | Legacy GrimmLink Wire Contract (/api/grimmlink/v1)
-             | Transport: x-auth-user + MD5(x-auth-key)
-             v
-+-------------------------+
-|    GrimmLink Adapter    | <---> [ Local SQLite Cache / Outbox ]
-|  (Standalone FastAPI)   |       (Tokens, Hash Cache, Idempotency)
-+------------+------------+
-             |
-             | Standard Official Grimmory HTTP API
-             | - /api/v1/auth/login & refresh (Bearer JWT)
-             | - /api/v1/shelves & /api/v1/app/shelves/magic
-             | - /api/koreader/syncs/progress (Official KOReader sync)
-             | - /api/v1/bookmarks, /api/v1/books, reading sessions
-             v
-+-------------------------+
-|    Official Grimmory    |
-|   (Unmodified Stock)    |
-+-------------------------+
-```
-
-### Key Architectural Invariants
-1. **Official Grimmory stays stock:** Zero source modifications, zero custom DB migrations in Grimmory.
-2. **Zero Direct DB Access:** The adapter communicates with Grimmory exclusively through official HTTP REST APIs.
-3. **SQLite Role:** SQLite in the adapter serves strictly as an **auxiliary cache, outbox queue, and idempotency store**—never as the primary source of truth.
-4. **Wire Contract Preservation:** The existing KOReader GrimmLink client continues to send legacy `/api/grimmlink/v1` calls without requiring immediate client-side rewrites.
-5. **Security Invariant:** Sensitive credentials (passwords, JWT tokens, MD5 keys) are **never** logged to stdout or persistent log files. Redaction filters are enforced at the logging level.
-6. **OPF Scope:** OPF sidecar discovery and ingestion is handled separately by [Grimmory Bridge](https://github.com/0xstillb/grimmory-bridge) (`OPF -> .metadata.json / .cover.jpg -> Official Grimmory Import All`). The adapter does **not** process OPF files.
-
----
-
-## 2. Tech Stack
-
-- **Runtime:** Python 3.12+
-- **Web Framework:** [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/)
-- **HTTP Client:** [httpx](https://www.python-httpx.org/) (Async HTTP client for upstream Grimmory calls)
-- **Validation:** [Pydantic v2](https://docs.pydantic.dev/) + `pydantic-settings`
-- **Cache/Outbox Store:** SQLite via `aiosqlite`
-- **Testing:** [pytest](https://pytest.org/), `pytest-asyncio`, `httpx` ASGI test client
-- **Containerization:** Docker & Docker Compose
-
----
-
-## 3. Project Structure
+## Target architecture
 
 ```text
-grimmlink-adapter/
-├── src/grimmlink_adapter/
-│   ├── api/             # GrimmLink compatibility API routes (/api/grimmlink/v1/**)
-│   ├── official/        # Upstream Official Grimmory HTTP client & endpoints
-│   ├── services/        # Translation, normalization, business logic & dispatch
-│   ├── state/           # SQLite cache, outbox queue & idempotency managers
-│   ├── models/          # Pydantic schemas (GrimmLink wire DTOs, Official DTOs, Internal)
-│   ├── security/        # Auth credential extractors & log masking/redaction
-│   ├── config.py        # Environment & application settings
-│   └── main.py          # FastAPI application factory
-├── migrations/          # SQLite database schema migrations (cache/outbox)
-├── tests/
-│   ├── contract/        # GrimmLink legacy wire contract compatibility tests
-│   ├── unit/            # Isolated unit tests (masking, normalization, models)
-│   └── integration/     # End-to-end adapter pipeline tests
-├── docs/
-│   ├── ARCHITECTURE.md  # Detailed architecture specification & data flow
-│   ├── MIGRATION_PLAN.md# 13-session defork migration roadmap
-│   ├── HANDOFF.md       # Inter-session handoff state & review gates
-│   └── ADR/
-│       └── ADR-0001-external-adapter-choice.md
-├── Dockerfile           # Minimal Python 3.12 container definition
-├── docker-compose.example.yml
-├── pyproject.toml       # Modern Python packaging configuration
-└── .env.example         # Environment variable template
+KOReader / existing GrimmLink plugin
+              ↓
+       GrimmLink Adapter
+      (standalone new repo)
+              ↓
+       Official Grimmory
 ```
 
----
+OPF แยกออกจาก adapter:
 
-## 4. Quickstart
-
-### Prerequisites
-- Python 3.12+ (or [uv](https://docs.astral.sh/uv/))
-- Docker & Docker Compose (optional, for containerized run)
-
-### Local Development Setup
-```bash
-# Clone the repository
-git clone https://github.com/0xstillb/grimmlink-adapter.git
-cd grimmlink-adapter
-
-# Install dependencies using uv
-uv sync
-
-# Run test suite
-uv run pytest -v
-
-# Run lint and format check
-uv run ruff check .
-uv run mypy src
+```text
+OPF → Grimmory Bridge → .metadata.json/.cover.jpg
+    → Official Grimmory → Import All
 ```
 
-### Running with Docker Compose
-```bash
-cp .env.example .env
-# Edit .env with your Grimmory URL and settings
-docker compose -f docker-compose.example.yml up -d
-```
+## New repo
+แนะนำ: `0xstillb/grimmlink-adapter`
 
----
+Default stack: Python 3.12 + FastAPI + httpx + SQLite + pydantic + pytest + Docker.
+ถ้าจะเปลี่ยน stack ต้องมี ADR อธิบาย blocker ก่อน
 
-## 5. Development & Review Governance
+## Model split
+- **GPT Plus / GPT-5.6 Sol High**: architecture, auth/security, hash identity, progress, metadata mapping, idempotency, migration/cutover review
+- **Antigravity / Gemini Flash 3.8**: scaffold, repetitive DTO/API implementation, fixtures, pagination plumbing, CI/Docker/docs หลัง scope ถูกล็อก
+- งานเสี่ยง data corruption: Flash implement ได้ แต่ต้อง GPT review ก่อน merge
 
-This repository follows a strict **Gemini First, Sol Review Gate** workflow:
-- **Implementer:** Gemini Flash 3.8
-- **Review Gatekeeper:** GPT-5.6 Sol High (deep review on data safety, semantics, contracts)
-- See [docs/MIGRATION_PLAN.md](docs/MIGRATION_PLAN.md) and [docs/HANDOFF.md](docs/HANDOFF.md) for details.
+## Rules
+1. Official Grimmory ต้อง stock
+2. ห้าม direct DB write
+3. ห้ามลบ fork ก่อน replacement ผ่าน canary
+4. ห้าม force-push/history rewrite
+5. small cherry-pick-friendly commits
+6. preserve user work
+7. ห้าม log password/token/MD5 key
+8. Magic Shelf removal = read-only/rule-derived
+9. multi-shelf ต้องไม่ลบ local file ผิด
+10. EPUB native location/CFI/XPointer เป็นตำแหน่งหลัก
+11. EPUB display % ต้องสัมพันธ์กับ page ratio เมื่อมี page data ที่เชื่อถือได้
+12. PDF page/progress/conflict semantics ต้องคงเดิม
+13. retry ต้อง idempotent
+14. OPF อยู่ใน Grimmory Bridge ไม่ย้ายเข้า adapter
+
+## Session order
+00 → 12 ตามไฟล์ใน `sessions/`
+ทุก session ต้องอ่านและอัปเดต `docs/HANDOFF.md`
+
+
+## Additional session
+
+หลัง `03_BOOK_IDENTITY.md` ให้รัน:
+
+`03A_OPF_API_WITH_SIDECAR_FALLBACK.md`
+
+Primary = Official Metadata API  
+Fallback = Official-compatible Sidecar JSON

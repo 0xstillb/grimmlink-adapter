@@ -96,3 +96,14 @@ Upon **`APPROVE`** from GPT-5.6 Sol High:
 - **Proceed to Session 01 (`sessions/01_CONTRACT_FREEZE.md`):**
   - Freeze full existing GrimmLink wire contract into exhaustive executable tests and contract fixtures (`docs/LEGACY_GRIMMLINK_CONTRACT.md`).
   - Capture all field attributes (`REQUIRED`, `OPTIONAL`, `DERIVED`, `LEGACY`).
+
+---
+
+## 5. Scope Update Note (Session 03A Inclusion)
+- Prompt pack was updated by the user to introduce **Session 03A (`sessions/03A_OPF_API_WITH_SIDECAR_FALLBACK.md`)**.
+- The architecture now specifies:
+  - OPF Ingestion in the adapter: **Official Metadata/Cover API as PRIMARY**, and **Sidecar JSON (`.metadata.json` / `.cover.jpg`) as FALLBACK**.
+  - Strict fallback invariant: Never use fallback to mask identity, auth, or field-lock errors.
+  - Configuration settings added to `Settings` (`METADATA_INGESTION_MODE=api_preferred`, `METADATA_FALLBACK=sidecar`).
+  - `src/grimmlink_adapter/opf/` package created as scaffold.
+

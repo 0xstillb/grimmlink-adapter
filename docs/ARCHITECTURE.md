@@ -22,19 +22,21 @@ flowchart TD
         API["API Compatibility Layer\n(/api/grimmlink/v1/**)"]
         SEC["Security & Redaction Filter\n(x-auth-user + MD5, Bearer)"]
         SVC["Translation & Normalization Services\n(Auth, Books, Shelves, Progress, Sessions)"]
+        OPFSVC["OPF Ingestion Service (Session 03A)\n(Parser, Normalizer, Sidecar Generator)"]
         SQLITE[("Auxiliary SQLite State\n- Token Cache\n- Hash Cache\n- Shelf Ownership\n- Outbox Queue\n- Idempotency Keys")]
         OFFCLIENT["Official Grimmory HTTP Client\n(httpx / REST)"]
     end
 
     subgraph Upstream ["Stock Official Grimmory (Unmodified ghcr.io Image)"]
-        GRIMMORY["Official Grimmory Server\n- /api/v1/auth\n- /api/v1/shelves\n- /api/v1/books\n- /api/koreader/syncs/progress\n- /api/v1/reading-sessions"]
+        GRIMMORY["Official Grimmory Server\n- /api/v1/auth\n- /api/v1/shelves\n- /api/v1/books\n- /api/v1/books/{id}/metadata (PRIMARY)\n- /api/koreader/syncs/progress\n- /api/v1/reading-sessions"]
         GDB[("Grimmory Database\n(Internal / Zero Direct Access)")]
+        SIDECAR_IMPORT["Official Sidecar Import All\n(FALLBACK)"]
     end
 
-    subgraph OPFWorkflow ["Separate OPF Workflow (Out of Scope for Adapter)"]
-        OPF["OPF Files"] --> BRIDGE["Grimmory Bridge"]
-        BRIDGE --> SIDECAR[".metadata.json / .cover.jpg"]
-        SIDECAR --> IMPORT["Official Grimmory Import All"]
+    subgraph OPFWorkflow ["OPF Ingestion Pipeline (Session 03A)"]
+        OPF["metadata.opf / adjacent .opf"] --> OPFSVC
+        OPFSVC -->|"PRIMARY:\nPUT /books/{id}/metadata\nPOST /cover/upload"| OFFCLIENT
+        OPFSVC -.->|"FALLBACK:\n.metadata.json / .cover.jpg"| SIDECAR_IMPORT
     end
 
     KL -->|"Legacy HTTP/JSON\nx-auth-user + MD5 x-auth-key"| API
@@ -72,9 +74,12 @@ flowchart TD
    - Sensitive credentials—including user passwords, JWT Bearer tokens, and MD5 authentication keys—are **never** logged to stdout, stderr, or log files at any log level.
    - Enforced by application-wide `SecretMaskingFilter`.
 
-6. **OPF Processing is External:**
-   - OPF parsing and metadata augmentation are completely outside the scope of `grimmlink-adapter`.
-   - Handled separately by [Grimmory Bridge](https://github.com/0xstillb/grimmory-bridge) via sidecar generation.
+6. **OPF Ingestion Architecture (Session 03A):**
+   - OPF discovery, parsing, and normalization is handled by the adapter.
+   - **PRIMARY PATH:** Update metadata directly via Official Grimmory Metadata API (`PUT /api/v1/books/{bookId}/metadata`) and Cover API (`POST /api/v1/books/{bookId}/metadata/cover/upload`).
+   - **FALLBACK PATH:** Generate Official-compatible `.metadata.json` and `.cover.jpg` only under approved fallback conditions (API timeout/unavailable, schema mismatch, cover API failure, or explicit user setting).
+   - **Strict Fallback Invariant:** Sidecar fallback must **never** be used to mask ambiguous book identity, authentication/authorization failures, malformed OPFs, or field-lock conflicts.
+   - **File Safety Invariant:** Ingestion must **never** modify the original book file (EPUB, PDF, CBZ). Book hash before and after must remain strictly identical.
 
 7. **Magic Shelf Invariants:**
    - Magic Shelf removal is strictly rule-derived and read-only.
@@ -129,3 +134,9 @@ flowchart TD
 ### 3.5 `grimmlink_adapter.services`
 - Translation layer mediating between legacy GrimmLink DTOs and Official Grimmory schemas.
 - Handles rating scale transformations (1–10 to 1–5), CFI/XPointer verification, and display percentage normalization.
+
+### 3.6 `grimmlink_adapter.opf` (Session 03A)
+- OPF discovery (`metadata.opf` and adjacent `<stem>.opf`) with safe path containment.
+- Normalizes canonical metadata (title, authors, publisher, series, ISBN-10/13, description).
+- Primary dispatcher: invokes Official Grimmory Metadata API (`PUT /api/v1/books/{bookId}/metadata`) and Cover upload API (`POST /api/v1/books/{bookId}/metadata/cover/upload`).
+- Fallback dispatcher: writes Official-compatible `.metadata.json` and `.cover.jpg` under strict fallback criteria.

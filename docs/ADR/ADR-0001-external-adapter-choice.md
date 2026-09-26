@@ -69,7 +69,7 @@ We will build and deploy `grimmlink-adapter` as a standalone external service:
 3. **Compatibility Route Boundary:** All legacy `/api/grimmlink/v1/**` routes exist only in the adapter, never in Official Grimmory.
 4. **SQLite Role:** The adapter's SQLite database is strictly an **auxiliary cache, outbox queue, and idempotency store**. Official Grimmory remains the sole source of truth for library entities.
 5. **Security Invariant:** Sensitive credentials (passwords, JWT tokens, MD5 keys) must never be logged. Redaction filters are enforced at the application logging boundary.
-6. **OPF Boundary:** OPF parsing and metadata augmentation are completely outside the scope of `grimmlink-adapter`. This responsibility belongs to [Grimmory Bridge](https://github.com/0xstillb/grimmory-bridge).
+6. **OPF Ingestion Strategy (Session 03A):** The adapter handles OPF discovery and normalization using Official Grimmory Metadata and Cover APIs as the primary destination, with structured `.metadata.json` and `.cover.jpg` sidecar generation as an approved fallback. Ingestion operates strictly without modifying source ebook files. Grimmory Bridge remains available as an external preview/migration tool.
 
 ---
 
