@@ -2,6 +2,8 @@
 
 import logging
 
+from fastapi import HTTPException, status
+
 from grimmlink_adapter.models.grimmlink import KoreaderProgressPayload
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 
@@ -38,10 +40,12 @@ class ProgressService:
         )
 
     async def update_progress(self, progress: KoreaderProgressPayload) -> None:
-        """Normalize and queue or forward progress update."""
-        if progress.current_page is not None and progress.total_pages is not None:
-            # Enforce accurate display percentage calculation invariant
-            progress.percentage = calculate_display_percentage(
-                progress.current_page, progress.total_pages
-            )
-        logger.debug("Progress updated for book_hash=%s", progress.book_hash)
+        """Normalize and queue or forward progress update.
+
+        Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        Activated in Session 06 (Progress Normalization).
+        """
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Progress update mutation is not supported in Session 00 scaffold; will be implemented in Session 06.",
+        )

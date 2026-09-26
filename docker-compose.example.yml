@@ -12,6 +12,7 @@ services:
       - ADAPTER_PORT=8085
       - GRIMMORY_BASE_URL=http://grimmory:6060
       - SQLITE_DB_PATH=/app/data/grimmlink_adapter.db
+      - MIGRATIONS_DIR=/app/migrations
       - LOG_LEVEL=INFO
       - OFFICIAL_CLIENT_TIMEOUT=15.0
       - OFFICIAL_CLIENT_MAX_RETRIES=3

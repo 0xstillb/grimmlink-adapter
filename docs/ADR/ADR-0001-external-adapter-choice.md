@@ -54,7 +54,7 @@ We need an architecture that allows users to run **unmodified, stock Official Gr
   - **Zero Direct DB Access:** Adapter communicates with Grimmory exclusively through its official REST API.
   - **Wire Contract Compatibility:** KOReader client continues speaking `/api/grimmlink/v1/**` during the migration phase.
   - **Reliable Local State:** SQLite in the adapter acts as an auxiliary cache, outbox queue, and idempotency store.
-  - **Clean OPF Separation:** OPF processing is cleanly delegated to Grimmory Bridge (`OPF -> .metadata.json / .cover.jpg -> Official Grimmory Import All`).
+  - **Unified OPF Strategy (Session 03A):** OPF discovery and normalization are handled by the adapter targeting Official Grimmory Metadata/Cover APIs (Primary) with Sidecar JSON fallback, while preserving original ebook files untouched.
   - **Rapid Verification:** Easily testable via standard Python testing tools (`pytest`, `httpx`, CI).
 - **Verdict:** **Accepted**.
 

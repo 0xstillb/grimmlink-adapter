@@ -52,12 +52,33 @@ class Settings(BaseSettings):
         description="Metadata fallback strategy: sidecar or none",
     )
 
+    # Migrations directory
+    MIGRATIONS_DIR: str = Field(
+        default="migrations",
+        description="Path to SQL migrations directory",
+    )
+
     @property
     def sqlite_db_path_resolved(self) -> Path:
         """Return resolved Path to the SQLite DB, ensuring parent directory exists."""
         p = Path(self.SQLITE_DB_PATH).resolve()
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
+
+    @property
+    def migrations_dir_resolved(self) -> Path:
+        """Resolve the migrations directory path reliably across local dev and containerized runs."""
+        candidates = [
+            Path(self.MIGRATIONS_DIR).resolve(),
+            Path.cwd() / self.MIGRATIONS_DIR,
+            Path("/app/migrations"),
+            Path(__file__).resolve().parent.parent.parent.parent / "migrations",
+            Path(__file__).resolve().parent.parent.parent / "migrations",
+        ]
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+        return Path(self.MIGRATIONS_DIR).resolve()
 
 
 settings = Settings()

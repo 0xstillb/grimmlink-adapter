@@ -42,22 +42,22 @@ def mask_secret(text: str) -> str:
 
 
 class SecretMaskingFilter(logging.Filter):
-    """Logging filter that scrubs sensitive credentials from all log records."""
+    """Logging filter that scrubs sensitive credentials from all log records.
+
+    Formats message arguments first, then scrubs all sensitive credentials across
+    the entire formatted string, and empties record.args to eliminate any leak
+    of raw argument tuples or dicts to stderr or subsequent handlers.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.msg, str):
-            record.msg = mask_secret(record.msg)
-        if record.args:
-            if isinstance(record.args, dict):
-                record.args = {
-                    k: (mask_secret(str(v)) if isinstance(v, str) else v)
-                    for k, v in record.args.items()
-                }
-            elif isinstance(record.args, tuple):
-                record.args = tuple(
-                    mask_secret(str(arg)) if isinstance(arg, str) else arg
-                    for arg in record.args
-                )
+        try:
+            formatted = record.getMessage()
+        except Exception:
+            # Fallback in case argument formatting fails
+            formatted = f"{record.msg} args={record.args}"
+
+        record.msg = mask_secret(formatted)
+        record.args = ()
         return True
 
 

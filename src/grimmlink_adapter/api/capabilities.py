@@ -6,14 +6,16 @@ from grimmlink_adapter.models.grimmlink import GrimmlinkCapabilitiesResponse
 
 router = APIRouter(tags=["Capabilities"])
 
+# In Session 00 (scaffold), mutations are not yet enabled in Official Grimmory.
+# Capabilities explicitly reflect what is currently operational.
 _STATIC_CAPABILITIES = GrimmlinkCapabilitiesResponse(
     apiVersion="v1",
-    webUiProgress=True,
-    progressSync=True,
+    webUiProgress=False,
+    progressSync=False,
     pdfBridge=False,
-    readingSessions=True,
-    metadataSync=True,
-    shelves=True,
+    readingSessions=False,
+    metadataSync=False,
+    shelves=True,  # Read-only shelf queries supported in scaffold
 )
 
 

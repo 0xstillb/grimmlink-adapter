@@ -24,7 +24,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ADAPTER_HOST=0.0.0.0 \
     ADAPTER_PORT=8085 \
-    SQLITE_DB_PATH=/app/data/grimmlink_adapter.db
+    SQLITE_DB_PATH=/app/data/grimmlink_adapter.db \
+    MIGRATIONS_DIR=/app/migrations
 
 # Create non-root user and data volume directory
 RUN groupadd -r adapter && useradd -r -g adapter -d /app -s /sbin/nologin adapter \
@@ -36,8 +37,8 @@ COPY --from=builder /build/wheels /wheels
 RUN pip install --no-cache-dir /wheels/* \
     && rm -rf /wheels
 
-# Copy migrations and static resources
-COPY migrations /app/migrations
+# Copy migrations with non-root ownership
+COPY --chown=adapter:adapter migrations /app/migrations
 
 USER adapter
 

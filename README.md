@@ -23,11 +23,12 @@ KOReader / existing GrimmLink plugin
        Official Grimmory
 ```
 
-OPF แยกออกจาก adapter:
+OPF ingestion (Session 03A):
 
 ```text
-OPF → Grimmory Bridge → .metadata.json/.cover.jpg
-    → Official Grimmory → Import All
+OPF → GrimmLink Adapter → Official Metadata/Cover API (PRIMARY)
+                        ↳ .metadata.json/.cover.jpg sidecar (FALLBACK)
+                        → Official Grimmory Import All
 ```
 
 ## New repo
@@ -55,7 +56,7 @@ Default stack: Python 3.12 + FastAPI + httpx + SQLite + pydantic + pytest + Dock
 11. EPUB display % ต้องสัมพันธ์กับ page ratio เมื่อมี page data ที่เชื่อถือได้
 12. PDF page/progress/conflict semantics ต้องคงเดิม
 13. retry ต้อง idempotent
-14. OPF อยู่ใน Grimmory Bridge ไม่ย้ายเข้า adapter
+14. OPF ingestion: Primary = Official Metadata API, Fallback = Sidecar JSON (Session 03A); source ebook files are never modified
 
 ## Session order
 00 → 12 ตามไฟล์ใน `sessions/`

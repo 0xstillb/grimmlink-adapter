@@ -14,6 +14,7 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_KOREADER_PROGRESS_HASH,
     OFFICIAL_MAGIC_SHELVES,
     OFFICIAL_SHELVES,
+    OFFICIAL_USERS_ME,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,14 @@ class OfficialGrimmoryClient:
         payload = {"username": username, "password": password}
         async with self._get_client() as client:
             resp = await client.post(OFFICIAL_AUTH_LOGIN, json=payload)
+            resp.raise_for_status()
+            return resp.json()  # type: ignore[no-any-return]
+
+    async def get_current_user(self, bearer_token: str) -> dict[str, Any]:
+        """Fetch current authenticated user profile using Bearer JWT."""
+        headers = {"Authorization": f"Bearer {bearer_token}"}
+        async with self._get_client() as client:
+            resp = await client.get(OFFICIAL_USERS_ME, headers=headers)
             resp.raise_for_status()
             return resp.json()  # type: ignore[no-any-return]
 

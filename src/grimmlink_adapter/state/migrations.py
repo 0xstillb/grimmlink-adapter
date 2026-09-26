@@ -3,21 +3,32 @@
 import logging
 from pathlib import Path
 
+from grimmlink_adapter.config import settings
 from grimmlink_adapter.state.database import get_connection
 
 logger = logging.getLogger(__name__)
 
 
 async def apply_migrations(migrations_dir: Path | None = None) -> int:
-    """Read and apply all SQL migrations in order."""
-    if migrations_dir is None:
-        migrations_dir = Path(__file__).resolve().parent.parent.parent.parent / "migrations"
+    """Read and apply all SQL migrations in order.
 
-    if not migrations_dir.exists():
-        logger.warning("Migrations directory %s not found", migrations_dir)
-        return 0
+    Raises FileNotFoundError if the migrations directory or migration files
+    are missing, preventing application startup with unmigrated database.
+    """
+    if migrations_dir is None:
+        migrations_dir = settings.migrations_dir_resolved
+
+    if not migrations_dir.exists() or not migrations_dir.is_dir():
+        error_msg = f"Migrations directory not found at: {migrations_dir}. Cannot start without valid schema."
+        logger.critical(error_msg)
+        raise FileNotFoundError(error_msg)
 
     migration_files = sorted(migrations_dir.glob("*.sql"))
+    if not migration_files:
+        error_msg = f"No .sql migration files found in directory: {migrations_dir}"
+        logger.critical(error_msg)
+        raise FileNotFoundError(error_msg)
+
     applied_count = 0
 
     async with get_connection() as conn:

@@ -1,9 +1,19 @@
 """Unit tests verifying SQLite cache, outbox queue, and multi-shelf ownership safety."""
 
-import pytest
+from pathlib import Path
 
+import pytest
+from fastapi import HTTPException
+
+from grimmlink_adapter.models.grimmlink import GrimmlinkReadingSessionItemRequest
 from grimmlink_adapter.models.internal import BookHashEntry, CachedToken
+from grimmlink_adapter.services.session_service import (
+    SessionService,
+    generate_session_idempotency_key,
+)
+from grimmlink_adapter.services.shelf_service import ShelfService
 from grimmlink_adapter.state.cache import BookHashCache, ShelfOwnershipCache, TokenCache
+from grimmlink_adapter.state.migrations import apply_migrations
 from grimmlink_adapter.state.outbox import IdempotencyManager, OutboxManager
 
 
@@ -102,3 +112,50 @@ async def test_outbox_queue_lifecycle() -> None:
     await OutboxManager.mark_completed(item_id)
     pending_after = await OutboxManager.get_pending()
     assert not any(item.id == item_id for item in pending_after)
+
+
+@pytest.mark.asyncio
+async def test_migrations_raise_on_missing_or_empty_dir(tmp_path: Path) -> None:
+    """Issue 4 fix verification: Missing or empty migrations dir must fail startup."""
+    non_existent = tmp_path / "does_not_exist"
+    with pytest.raises(FileNotFoundError, match="Migrations directory not found"):
+        await apply_migrations(migrations_dir=non_existent)
+
+    empty_dir = tmp_path / "empty_migrations"
+    empty_dir.mkdir()
+    with pytest.raises(FileNotFoundError, match="No .sql migration files found"):
+        await apply_migrations(migrations_dir=empty_dir)
+
+
+@pytest.mark.asyncio
+async def test_session_idempotency_not_created_in_scaffold() -> None:
+    """Issue 2 fix verification: No idempotency key must be created when session recording is not implemented."""
+    service = SessionService()
+    req = GrimmlinkReadingSessionItemRequest(
+        bookId=999,
+        startTime="2026-09-26T12:00:00Z",
+        endTime="2026-09-26T12:30:00Z",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await service.record_session(req, username="test_user")
+    assert exc_info.value.status_code == 501
+
+    key = generate_session_idempotency_key("test_user", 999, "2026-09-26T12:00:00Z", "2026-09-26T12:30:00Z")
+    stored = await IdempotencyManager.get_response(key)
+    assert stored is None, "Idempotency key must NOT be stored for unexecuted mutation"
+
+
+@pytest.mark.asyncio
+async def test_shelf_ownership_not_altered_when_unimplemented() -> None:
+    """Issue 2 fix verification: SQLite shelf ownership must NOT be deleted when mutation is unperformed."""
+    service = ShelfService()
+    book_id = 777
+    await ShelfOwnershipCache.record_ownership(book_id, shelf_id=1, shelf_type="regular")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.remove_book_from_shelf(shelf_type="regular", shelf_id=1, book_id=book_id)
+    assert exc_info.value.status_code == 501
+
+    # Invariant: ownership cache must remain untouched
+    is_tracked = await ShelfOwnershipCache.is_tracked_in_other_shelves(book_id, exclude_shelf_id=999, exclude_shelf_type="regular")
+    assert is_tracked is True, "Ownership must not be removed prematurely"

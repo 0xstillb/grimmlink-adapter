@@ -2,6 +2,8 @@
 
 import logging
 
+from fastapi import HTTPException, status
+
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkMetadataBatchResponse,
     GrimmlinkMetadataPullResponse,
@@ -27,26 +29,27 @@ class MetadataService:
         self.official_client = official_client or OfficialGrimmoryClient()
 
     async def sync_metadata(self, request: GrimmlinkMetadataSyncRequest | None) -> GrimmlinkMetadataSyncResponse:
-        """Handle single metadata sync push."""
-        items_count = len(request.items) if request and request.items else 0
-        return GrimmlinkMetadataSyncResponse(
-            status="ok",
-            appliedCount=items_count,
-            skippedCount=0,
-            results=[],
+        """Handle single metadata sync push.
+
+        Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        Activated in Session 07 (Metadata Sync).
+        """
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Metadata push mutation is not supported in Session 00 scaffold; will be implemented in Session 07.",
         )
 
     async def sync_metadata_batch(
         self, request: GrimmlinkMetadataSyncRequest | None
     ) -> GrimmlinkMetadataBatchResponse:
-        """Handle metadata batch sync push."""
-        items_count = len(request.items) if request and request.items else 0
-        return GrimmlinkMetadataBatchResponse(
-            status="ok",
-            totalItems=items_count,
-            successCount=items_count,
-            failureCount=0,
-            results=[],
+        """Handle metadata batch sync push.
+
+        Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        Activated in Session 07 (Metadata Sync).
+        """
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Metadata batch mutation is not supported in Session 00 scaffold; will be implemented in Session 07.",
         )
 
     async def pull_metadata(

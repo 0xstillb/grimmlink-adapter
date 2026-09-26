@@ -10,7 +10,6 @@ from grimmlink_adapter.models.grimmlink import (
     GrimmlinkShelfSummary,
 )
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
-from grimmlink_adapter.state.cache import ShelfOwnershipCache
 
 logger = logging.getLogger(__name__)
 
@@ -78,29 +77,10 @@ class ShelfService:
                 detail="Manual removal from a magic shelf is not supported because magic shelves are rule-derived.",
             )
 
-        # Multi-shelf safety check
-        is_shared = await ShelfOwnershipCache.is_tracked_in_other_shelves(
-            book_id=book_id,
-            exclude_shelf_id=shelf_id,
-            exclude_shelf_type=shelf_type,
-        )
-
-        await ShelfOwnershipCache.remove_ownership(
-            book_id=book_id,
-            shelf_id=shelf_id,
-            shelf_type=shelf_type,
-        )
-
-        message = (
-            "Book removed from shelf. Retained locally because it belongs to other shelves."
-            if is_shared
-            else "Book removed from shelf."
-        )
-
-        return GrimmlinkShelfRemovalResponse(
-            success=True,
-            message=message,
-            shelfId=shelf_id,
-            bookId=book_id,
-            shelfType=shelf_type,
+        # Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        # Activated in Session 05 (Shelf Mutation & Cleanup).
+        # SQLite ownership must not be altered before upstream mutation succeeds.
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Shelf book unassignment mutation is not supported in Session 00 scaffold; will be implemented in Session 05.",
         )

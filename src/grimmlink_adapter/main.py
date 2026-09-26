@@ -27,8 +27,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Ensure SQLite directory exists and apply migrations
     db_path = settings.sqlite_db_path_resolved
     logger.info("SQLite database path: %s", db_path)
-    applied = await apply_migrations()
-    logger.info("Applied %d database migration(s)", applied)
+    try:
+        applied = await apply_migrations()
+        logger.info("Applied %d database migration(s)", applied)
+    except Exception as exc:
+        logger.critical("Failed to apply database migrations during startup: %s", exc)
+        raise
 
     yield
 

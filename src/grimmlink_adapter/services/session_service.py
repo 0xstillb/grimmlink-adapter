@@ -4,14 +4,14 @@ import hashlib
 import logging
 from typing import Any
 
+from fastapi import HTTPException, status
+
 from grimmlink_adapter.models.grimmlink import (
-    GrimmlinkItemResult,
     GrimmlinkReadingSessionBatchRequest,
     GrimmlinkReadingSessionBatchResponse,
     GrimmlinkReadingSessionItemRequest,
 )
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
-from grimmlink_adapter.state.outbox import IdempotencyManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,62 +39,28 @@ class SessionService:
         return []
 
     async def record_session(self, session: GrimmlinkReadingSessionItemRequest, username: str = "default") -> bool:
-        """Record a single reading session with idempotency check."""
-        key = generate_session_idempotency_key(
-            username=username,
-            book_id=session.bookId,
-            start_time=session.startTime,
-            end_time=session.endTime,
-            device_id=session.deviceId,
-        )
-        existing = await IdempotencyManager.get_response(key)
-        if existing:
-            logger.debug("Idempotent session skipped for key %s", key)
-            return True
+        """Record a single reading session.
 
-        await IdempotencyManager.record_response(
-            idempotency_key=key,
-            action="RECORD_SESSION",
-            response_status=200,
-            response_body="{}",
+        Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        Activated in Session 08 (Reading Sessions & Idempotency).
+        Idempotency keys must not be recorded until upstream mutation succeeds.
+        """
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Reading session recording is not supported in Session 00 scaffold; will be implemented in Session 08.",
         )
-        return True
 
     async def record_sessions_batch(
         self,
         request: GrimmlinkReadingSessionBatchRequest,
         username: str = "default",
     ) -> GrimmlinkReadingSessionBatchResponse:
-        """Record batch of reading sessions with individual idempotency checks."""
-        accepted = 0
-        duplicates = 0
-        results: list[GrimmlinkItemResult] = []
+        """Record batch of reading sessions.
 
-        for item in request.sessions:
-            key = generate_session_idempotency_key(
-                username=username,
-                book_id=item.bookId,
-                start_time=item.startTime,
-                end_time=item.endTime,
-                device_id=item.deviceId,
-            )
-            existing = await IdempotencyManager.get_response(key)
-            if existing:
-                duplicates += 1
-                results.append(GrimmlinkItemResult(itemId=key, status="DUPLICATE"))
-            else:
-                accepted += 1
-                await IdempotencyManager.record_response(
-                    idempotency_key=key,
-                    action="RECORD_SESSION",
-                    response_status=200,
-                    response_body="{}",
-                )
-                results.append(GrimmlinkItemResult(itemId=key, status="SUCCESS"))
-
-        return GrimmlinkReadingSessionBatchResponse(
-            totalReceived=len(request.sessions),
-            acceptedCount=accepted,
-            duplicateCount=duplicates,
-            results=results,
+        Mutations to Official Grimmory are disabled in Session 00 (scaffold).
+        Activated in Session 08 (Reading Sessions & Idempotency).
+        """
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Reading session batch recording is not supported in Session 00 scaffold; will be implemented in Session 08.",
         )

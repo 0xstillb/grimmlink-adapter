@@ -31,7 +31,7 @@ References:
 
 Target:
 KOReader/current GrimmLink → standalone adapter → Official Grimmory HTTP API only.
-Official Grimmory stays stock. No direct DB access/write. OPF is out of scope.
+Official Grimmory stays stock. No direct DB access/write. OPF ingestion: Primary = Official Metadata/Cover API, Fallback = Sidecar JSON (Session 03A); source ebook files are never modified.
 
 Default stack: Python 3.12, FastAPI, httpx, SQLite, pydantic, pytest, Docker.
 
