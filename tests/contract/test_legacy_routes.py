@@ -6,6 +6,9 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
+from grimmlink_adapter.models.internal import BookHashEntry
+from grimmlink_adapter.state.cache import BookHashCache
+
 AUTH_HEADERS = {
     "x-auth-user": "test_reader",
     "x-auth-key": "098f6bcd4621d373cade4e832627b4f6",  # md5('test')
@@ -80,21 +83,14 @@ async def test_capabilities_endpoint_contract(test_client: AsyncClient) -> None:
     assert data["readingSessions"] is False
     assert data["metadataSync"] is False
     assert data["pdfBridge"] is False
-    # Read path for shelves is supported
-    assert data["shelves"] is True
+    assert data["shelves"] is False
 
 
 @pytest.mark.asyncio
-async def test_shelves_list_contract(test_client: AsyncClient) -> None:
+async def test_shelves_list_unavailable_in_scaffold(test_client: AsyncClient) -> None:
     resp = await test_client.get("/api/grimmlink/v1/shelves", headers=AUTH_HEADERS)
-    assert resp.status_code == 200
-    shelves = resp.json()
-    assert isinstance(shelves, list)
-    assert len(shelves) > 0
-    first = shelves[0]
-    assert "id" in first
-    assert "name" in first
-    assert "type" in first
+    assert resp.status_code == 501
+    assert "shelf listing is unavailable" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -123,13 +119,12 @@ async def test_regular_shelf_removal_returns_501_in_scaffold(test_client: AsyncC
 
 @pytest.mark.asyncio
 async def test_progress_sync_contract(test_client: AsyncClient) -> None:
-    # GET progress is supported (read path)
+    # GET must not invent zero progress while Official reads are unimplemented.
     get_resp = await test_client.get(
         "/api/grimmlink/v1/syncs/progress/sample_book_hash_123",
         headers=AUTH_HEADERS,
     )
-    assert get_resp.status_code == 200
-    assert get_resp.json()["book_hash"] == "sample_book_hash_123"
+    assert get_resp.status_code == 501
 
     # PUT progress returns 501 Not Implemented in scaffold (Issue 2 fix)
     payload = {
@@ -185,3 +180,50 @@ async def test_reading_sessions_batch_returns_501_in_scaffold(test_client: Async
     )
     assert resp.status_code == 501
     assert "not supported in session 00 scaffold" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/grimmlink/v1/shelves/regular/1/books",
+        "/api/grimmlink/v1/shelves/magic/100/books",
+        "/api/grimmlink/v1/syncs/metadata",
+        "/api/grimmlink/v1/reading-sessions?bookId=42",
+        "/api/grimmlink/v1/books/42/download",
+        "/api/grimmlink/v1/books/read-statuses",
+    ],
+)
+async def test_unimplemented_reads_never_return_empty_success(
+    test_client: AsyncClient, path: str
+) -> None:
+    resp = await test_client.get(path, headers=AUTH_HEADERS)
+    assert resp.status_code == 501
+
+
+@pytest.mark.asyncio
+async def test_book_hash_cache_is_not_exposed_before_access_checks(
+    test_client: AsyncClient,
+) -> None:
+    await BookHashCache.put(
+        BookHashEntry(book_hash="cached-book-123", book_id=42, title="Private Book")
+    )
+    resp = await test_client.get(
+        "/api/grimmlink/v1/books/by-hash/cached-book-123",
+        headers={"x-auth-user": "unknown", "x-auth-key": "invalid"},
+    )
+    assert resp.status_code == 501
+    assert "Private Book" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_read_status_does_not_report_unperformed_update(
+    test_client: AsyncClient,
+) -> None:
+    resp = await test_client.put(
+        "/api/grimmlink/v1/books/42/status",
+        json={"status": "COMPLETED"},
+        headers=AUTH_HEADERS,
+    )
+    assert resp.status_code == 501
+    assert "updated" not in resp.json()

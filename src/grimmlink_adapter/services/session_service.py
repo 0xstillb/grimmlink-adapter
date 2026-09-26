@@ -35,8 +35,11 @@ class SessionService:
         self.official_client = official_client or OfficialGrimmoryClient()
 
     async def get_reading_sessions(self, book_id: int, limit: int = 50) -> list[dict[str, Any]]:
-        """List reading sessions for a book."""
-        return []
+        """Reject session reads until Official session retrieval is implemented."""
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Reading-session retrieval is unavailable until Official sessions are implemented.",
+        )
 
     async def record_session(self, session: GrimmlinkReadingSessionItemRequest, username: str = "default") -> bool:
         """Record a single reading session.

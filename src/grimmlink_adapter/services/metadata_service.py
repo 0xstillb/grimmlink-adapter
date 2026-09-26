@@ -62,5 +62,8 @@ class MetadataService:
         limit: int | None = None,
         item_type: str | None = None,
     ) -> GrimmlinkMetadataPullResponse:
-        """Handle metadata pull request."""
-        return GrimmlinkMetadataPullResponse(items=[], nextCursor=None, hasMore=False)
+        """Reject metadata pulls until Official items and cursors are mapped."""
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Metadata pulls are unavailable until Official metadata sync is implemented.",
+        )

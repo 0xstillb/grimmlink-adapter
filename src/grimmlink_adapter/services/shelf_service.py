@@ -21,31 +21,11 @@ class ShelfService:
         self.official_client = official_client or OfficialGrimmoryClient()
 
     async def list_shelves(self, shelf_type: str | None = None) -> list[GrimmlinkShelfSummary]:
-        """List unified regular and magic shelves."""
-        results: list[GrimmlinkShelfSummary] = []
-        # Return scaffold baseline shelves
-        if shelf_type in (None, "regular"):
-            results.append(
-                GrimmlinkShelfSummary(
-                    id=1,
-                    name="Default Shelf",
-                    type="regular",
-                    visibility="PRIVATE",
-                    bookCount=0,
-                )
-            )
-        if shelf_type in (None, "magic"):
-            results.append(
-                GrimmlinkShelfSummary(
-                    id=100,
-                    name="Currently Reading",
-                    type="magic",
-                    visibility="PRIVATE",
-                    bookCount=0,
-                    description="Rule-derived active reading shelf",
-                )
-            )
-        return results
+        """Reject shelf reads until Official regular and magic shelves are mapped."""
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Shelf listing is unavailable until Official shelf reads are implemented.",
+        )
 
     async def list_shelf_books(
         self,
@@ -55,8 +35,11 @@ class ShelfService:
         offset: int | None = None,
         cursor: str | None = None,
     ) -> list[GrimmlinkBookSummary]:
-        """List books belonging to a given shelf."""
-        return []
+        """Reject incomplete shelf snapshots during the scaffold phase."""
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Shelf books are unavailable until Official shelf reads are implemented.",
+        )
 
     async def remove_book_from_shelf(
         self,

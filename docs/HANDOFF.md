@@ -3,8 +3,8 @@
 - **Current Session:** `Session 00 — New Repo Bootstrap + Architecture Freeze`
 - **Implementer:** Gemini Flash 3.8
 - **Reviewer:** GPT-5.6 Sol High
-- **Current Lifecycle State:** `STOPPED — Ready for Sol Re-Review Gate (Post-Fixes)`
-- **Timestamp:** 2026-09-26T12:48:00+07:00
+- **Current Lifecycle State:** `Follow-up safety fixes complete — ready for review`
+- **Timestamp:** 2026-09-26T13:25:39+07:00
 
 ---
 
@@ -24,7 +24,7 @@ In response to the Sol High review gate, all 4 critical issues and the OPF archi
 ### Fix 2: Unimplemented Mutations Return 501 & Do Not Mutate State
 - **Issue:** Progress, metadata, session, and shelf endpoints falsely reported success without executing mutations, recorded premature idempotency keys, and modified SQLite ownership cache without upstream unassignment. Capabilities falsely claimed support.
 - **Fix:**
-  - `capabilities.py`: Explicitly advertises `progressSync: false`, `readingSessions: false`, `metadataSync: false`, `pdfBridge: false`. Only read operations (`shelves: true`) are claimed.
+  - `capabilities.py`: Explicitly advertises `progressSync: false`, `readingSessions: false`, `metadataSync: false`, `pdfBridge: false`. All unimplemented data capabilities, including `shelves: false`, are disabled.
   - `progress_service.py`: `update_progress` raises `HTTPException(501)` with note that progress mutation is activated in Session 06.
   - `metadata_service.py`: `sync_metadata` and `sync_metadata_batch` raise `HTTPException(501)` with note that metadata mutation is activated in Session 07.
   - `session_service.py`: `record_session` and `record_sessions_batch` raise `HTTPException(501)` and **strictly do not record idempotency keys** for unexecuted mutations.
@@ -63,7 +63,7 @@ In response to the Sol High review gate, all 4 critical issues and the OPF archi
 
 ## 2. Verification Evidence
 
-### Pytest Execution (`uv run pytest -v`)
+### Prior Gemini Pytest Execution (`uv run pytest -v`)
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
@@ -110,9 +110,17 @@ tests/unit/test_security_masking.py::test_logging_filter_scrubs_records_with_dic
 - `uv run ruff check .` → **All checks passed!**
 - `uv run mypy src` → **Success: no issues found in 35 source files**
 
+### Follow-up safety fix after re-review
+
+- Unimplemented shelf, progress, metadata, session, book download, and read-status reads now return HTTP 501 instead of fabricated or empty HTTP 200 responses.
+- Book hash lookup remains unavailable until Session 03 can verify both the caller and book access; cached book details are not exposed by the scaffold.
+- The unimplemented book read-status mutation returns HTTP 501. The capabilities endpoint advertises `shelves: false` alongside the other disabled sync capabilities.
+- Contract tests cover the disabled read paths, a cached book queried with invalid credentials, and a read-status update that must not report success.
+- Latest local verification: `uv run --no-sync pytest -q` → **41 passed**; `uv run --no-sync ruff check .` and `uv run --no-sync mypy src` passed.
+
 ---
 
 ## 3. Current Lifecycle State
 
-- **`STOPPED — Awaiting Sol Review Gate (No Merge Yet)`**
-- Implementer has completed all requested fixes, executed test matrix, committed changes, and paused.
+- **`Follow-up safety fixes complete — ready for review`**
+- The additional route and capability fixes are in the working tree for review.

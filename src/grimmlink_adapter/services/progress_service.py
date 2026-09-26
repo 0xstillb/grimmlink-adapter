@@ -30,13 +30,10 @@ class ProgressService:
         self.official_client = official_client or OfficialGrimmoryClient()
 
     async def get_progress(self, book_hash: str) -> KoreaderProgressPayload:
-        """Fetch reading progress for a given book hash."""
-        # Baseline scaffold return
-        return KoreaderProgressPayload(
-            book_hash=book_hash,
-            percentage=0.0,
-            current_page=1,
-            total_pages=1,
+        """Reject progress reads until Official data and native locations are mapped."""
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Progress reads are unavailable until Official progress sync is implemented.",
         )
 
     async def update_progress(self, progress: KoreaderProgressPayload) -> None:
