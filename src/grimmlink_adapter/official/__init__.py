@@ -1,0 +1,31 @@
+"""Official Grimmory upstream HTTP integration package."""
+
+from grimmlink_adapter.official.client import OfficialGrimmoryClient
+from grimmlink_adapter.official.endpoints import (
+    OFFICIAL_AUTH_LOGIN,
+    OFFICIAL_AUTH_REFRESH,
+    OFFICIAL_BOOK_BY_ID,
+    OFFICIAL_BOOK_DOWNLOAD,
+    OFFICIAL_BOOKMARKS,
+    OFFICIAL_BOOKS,
+    OFFICIAL_KOREADER_AUTH,
+    OFFICIAL_KOREADER_PROGRESS,
+    OFFICIAL_MAGIC_SHELVES,
+    OFFICIAL_READING_SESSIONS,
+    OFFICIAL_SHELVES,
+)
+
+__all__ = [
+    "OfficialGrimmoryClient",
+    "OFFICIAL_AUTH_LOGIN",
+    "OFFICIAL_AUTH_REFRESH",
+    "OFFICIAL_BOOK_BY_ID",
+    "OFFICIAL_BOOK_DOWNLOAD",
+    "OFFICIAL_BOOKMARKS",
+    "OFFICIAL_BOOKS",
+    "OFFICIAL_KOREADER_AUTH",
+    "OFFICIAL_KOREADER_PROGRESS",
+    "OFFICIAL_MAGIC_SHELVES",
+    "OFFICIAL_READING_SESSIONS",
+    "OFFICIAL_SHELVES",
+]
