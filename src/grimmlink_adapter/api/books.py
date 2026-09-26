@@ -2,17 +2,18 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from grimmlink_adapter.models.grimmlink import GrimmlinkBookSummary, GrimmlinkReadStatusRequest
+from grimmlink_adapter.models.grimmlink import GrimmlinkReadStatusRequest
+from grimmlink_adapter.models.official import OfficialBookDTO
 from grimmlink_adapter.security.auth_extractor import ClientCredentials, require_client_credentials
 
 router = APIRouter(prefix="/books", tags=["Books"])
 
 
-@router.get("/by-hash/{book_hash}", response_model=GrimmlinkBookSummary)
+@router.get("/by-hash/{book_hash}", response_model=OfficialBookDTO)
 async def get_book_by_hash(
     book_hash: str,
     creds: ClientCredentials = Depends(require_client_credentials),
-) -> GrimmlinkBookSummary:
+) -> OfficialBookDTO:
     """Defer hash lookup until user and book access can be verified upstream."""
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,

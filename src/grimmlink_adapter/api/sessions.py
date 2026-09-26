@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkReadingSessionBatchRequest,
     GrimmlinkReadingSessionBatchResponse,
-    GrimmlinkReadingSessionItemRequest,
+    GrimmlinkReadingSessionSingleRequest,
 )
 from grimmlink_adapter.security.auth_extractor import ClientCredentials, require_client_credentials
 from grimmlink_adapter.services.session_service import SessionService
@@ -28,7 +28,7 @@ async def get_sessions(
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def record_session(
-    request: GrimmlinkReadingSessionItemRequest,
+    request: GrimmlinkReadingSessionSingleRequest,
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> None:
     """Record a single reading session idempotently."""

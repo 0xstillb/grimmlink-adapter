@@ -34,34 +34,53 @@ class OfficialRefreshTokenRequest(BaseModel):
 
 
 class OfficialBookFileDTO(BaseModel):
-    """Official Grimmory BookFile representation."""
+    """BookFile DTO returned by the pinned Grimmory fork."""
 
     model_config = ConfigDict(extra="ignore")
 
     id: int
+    bookId: int | None = None
     fileName: str | None = None
-    originalFileName: str | None = None
-    extension: str | None = None
-    fileFormat: str | None = None
+    filePath: str | None = None
+    fileSubPath: str | None = None
+    isBook: bool | None = None
+    folderBased: bool | None = None
+    bookType: str | None = None
+    archiveType: str | None = None
     fileSizeKb: int | None = None
-    fileSize: int | None = None
-    hash: str | None = None
+    extension: str | None = None
+    description: str | None = None
+    addedOn: str | None = None
 
 
 class OfficialBookDTO(BaseModel):
-    """Official Grimmory Book representation."""
+    """Book DTO returned by the pinned Grimmory fork's by-hash route."""
 
     model_config = ConfigDict(extra="ignore")
 
     id: int
-    title: str | None = None
-    authors: list[str] = Field(default_factory=list)
-    description: str | None = None
-    readStatus: str | None = None
-    personalRating: int | float | None = None
+    libraryId: int | None = None
+    libraryName: str | None = None
     primaryFile: OfficialBookFileDTO | None = None
-    files: list[OfficialBookFileDTO] = Field(default_factory=list)
+    title: str | None = None
+    lastReadTime: str | None = None
+    addedOn: str | None = None
     metadata: dict[str, Any] | None = None
+    metadataMatchScore: float | None = None
+    pdfProgress: dict[str, Any] | None = None
+    epubProgress: dict[str, Any] | None = None
+    cbxProgress: dict[str, Any] | None = None
+    audiobookProgress: dict[str, Any] | None = None
+    koreaderProgress: dict[str, Any] | None = None
+    koboProgress: dict[str, Any] | None = None
+    personalRating: int | None = None
+    shelves: list[dict[str, Any]] | None = None
+    readStatus: str | None = None
+    dateFinished: str | None = None
+    libraryPath: dict[str, Any] | None = None
+    alternativeFormats: list[OfficialBookFileDTO] | None = None
+    supplementaryFiles: list[OfficialBookFileDTO] | None = None
+    isPhysical: bool | None = None
 
 
 class OfficialShelfDTO(BaseModel):

@@ -6,7 +6,7 @@ wire contract.
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class GrimmlinkAuthResponse(BaseModel):
@@ -79,7 +79,6 @@ class GrimmlinkShelfRemovalResponse(BaseModel):
     removed: bool = True
     status: str = "removed"
     message: str | None = None
-    success: bool = True
 
 
 class GrimmlinkReadStatusRequest(BaseModel):
@@ -212,7 +211,7 @@ class GrimmlinkMetadataSyncRequest(BaseModel):
     bookFileId: int | None = None
     fileFormat: str | None = "EPUB"
     device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
+    deviceId: str | None = Field(default=None, validation_alias=AliasChoices("deviceId", "device_id"))
     timestamp: str | None = None
     since: str | None = None
     cursor: str | None = None
@@ -255,7 +254,7 @@ class GrimmlinkMetadataPullItem(BaseModel):
     syncedAt: str | None = None
     updatedAt: str | None = None
     device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
+    deviceId: str | None = Field(default=None, validation_alias=AliasChoices("deviceId", "device_id"))
 
 
 class GrimmlinkMetadataPullResponse(BaseModel):
@@ -293,11 +292,9 @@ class GrimmlinkReadingSessionItemRequest(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    bookId: int | None = None
-    bookHash: str | None = None
     startTime: str
     endTime: str
-    durationSeconds: int | None = None
+    durationSeconds: int
     durationFormatted: str | None = None
     startProgress: float | None = None
     endProgress: float | None = None
@@ -306,10 +303,6 @@ class GrimmlinkReadingSessionItemRequest(BaseModel):
     endLocation: str | None = None
     startPage: int | None = None
     endPage: int | None = None
-    currentPage: int | None = None
-    totalPages: int | None = None
-    device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
 
 
 class GrimmlinkReadingSessionSingleRequest(BaseModel):
@@ -321,10 +314,10 @@ class GrimmlinkReadingSessionSingleRequest(BaseModel):
     bookType: str | None = "EPUB"
     bookHash: str | None = None
     device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
+    deviceId: str | None = Field(default=None, validation_alias=AliasChoices("deviceId", "device_id"))
     startTime: str
     endTime: str
-    durationSeconds: int | None = None
+    durationSeconds: int
     durationFormatted: str | None = None
     startProgress: float | None = None
     endProgress: float | None = None
@@ -360,12 +353,12 @@ class GrimmlinkReadingSessionBatchRequest(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    bookId: int | None = None
+    bookId: int
     bookHash: str | None = None
     bookType: str | None = "EPUB"
     device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
-    sessions: list[GrimmlinkReadingSessionItemRequest] = Field(default_factory=list)
+    deviceId: str | None = Field(default=None, validation_alias=AliasChoices("deviceId", "device_id"))
+    sessions: list[GrimmlinkReadingSessionItemRequest] = Field(min_length=1, max_length=500)
 
 
 class GrimmlinkReadingSessionResultItem(BaseModel):
@@ -386,12 +379,9 @@ class GrimmlinkReadingSessionBatchResponse(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    totalRequested: int | None = None
-    totalReceived: int | None = None
-    successCount: int | None = None
-    acceptedCount: int | None = None
-    duplicateCount: int | None = 0
-    results: list[GrimmlinkReadingSessionResultItem] | list[GrimmlinkItemResult] = Field(default_factory=list)
+    totalRequested: int
+    successCount: int
+    results: list[GrimmlinkReadingSessionResultItem] = Field(default_factory=list)
 
 
 class KoreaderProgressPayload(BaseModel):
@@ -403,21 +393,15 @@ class KoreaderProgressPayload(BaseModel):
     progress: str | None = None
     percentage: float | None = None
     device: str | None = None
-    deviceId: str | None = Field(default=None, alias="device_id")
-    device_id: str | None = None
+    device_id: str | None = Field(default=None, validation_alias=AliasChoices("device_id", "deviceId"))
     timestamp: int | None = None
-    bookHash: str | None = Field(default=None, alias="book_hash")
-    book_hash: str | None = None
-    bookId: int | None = Field(default=None, alias="book_id")
-    book_id: int | None = None
-    bookFileId: int | None = Field(default=None, alias="book_file_id")
-    book_file_id: int | None = None
+    bookHash: str | None = Field(default=None, validation_alias=AliasChoices("bookHash", "book_hash"))
+    bookId: int | None = Field(default=None, validation_alias=AliasChoices("bookId", "book_id"))
+    bookFileId: int | None = Field(default=None, validation_alias=AliasChoices("bookFileId", "book_file_id"))
     format: str | None = None
     fileFormat: str | None = None
-    currentPage: int | None = Field(default=None, alias="current_page")
-    current_page: int | None = None
-    totalPages: int | None = Field(default=None, alias="total_pages")
-    total_pages: int | None = None
+    currentPage: int | None = Field(default=None, validation_alias=AliasChoices("currentPage", "current_page"))
+    totalPages: int | None = Field(default=None, validation_alias=AliasChoices("totalPages", "total_pages"))
     location: str | None = None
     updatedAt: str | None = None
     updated: bool | None = None

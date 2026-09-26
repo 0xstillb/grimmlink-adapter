@@ -14,9 +14,7 @@
       "endProgress": 41.2,
       "progressDelta": 1.2,
       "startLocation": "/6/4[chap03]!/4/2/8/1:0",
-      "endLocation": "/6/4[chap03]!/4/2/9/1:10",
-      "currentPage": 120,
-      "totalPages": 300
+      "endLocation": "/6/4[chap03]!/4/2/9/1:10"
     },
     {
       "startTime": "2026-09-25T14:30:00Z",
@@ -27,9 +25,7 @@
       "endProgress": 42.5,
       "progressDelta": 1.3,
       "startLocation": "/6/4[chap03]!/4/2/9/1:10",
-      "endLocation": "/6/4[chap03]!/4/2/10/1:24",
-      "currentPage": 125,
-      "totalPages": 300
+      "endLocation": "/6/4[chap03]!/4/2/10/1:24"
     }
   ]
 }

@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkReadingSessionBatchRequest,
     GrimmlinkReadingSessionBatchResponse,
-    GrimmlinkReadingSessionItemRequest,
+    GrimmlinkReadingSessionSingleRequest,
 )
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 
@@ -41,7 +41,7 @@ class SessionService:
             detail="Reading-session retrieval is unavailable until Official sessions are implemented.",
         )
 
-    async def record_session(self, session: GrimmlinkReadingSessionItemRequest, username: str = "default") -> bool:
+    async def record_session(self, session: GrimmlinkReadingSessionSingleRequest, username: str = "default") -> bool:
         """Record a single reading session.
 
         Mutations to Official Grimmory are disabled in Session 00 (scaffold).

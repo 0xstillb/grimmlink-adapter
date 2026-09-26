@@ -163,11 +163,12 @@ async def test_metadata_sync_mutations_return_501_in_scaffold(test_client: Async
 async def test_reading_sessions_batch_returns_501_in_scaffold(test_client: AsyncClient) -> None:
     """Issue 2 fix verification: Reading sessions batch returns 501 in scaffold."""
     payload = {
+        "bookId": 10,
         "sessions": [
             {
-                "bookId": 10,
                 "startTime": "2026-09-26T11:00:00Z",
                 "endTime": "2026-09-26T11:45:00Z",
+                "durationSeconds": 2700,
                 "startPage": 10,
                 "endPage": 35,
             }

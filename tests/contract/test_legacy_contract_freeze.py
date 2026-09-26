@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkAuthErrorResponse,
@@ -286,6 +287,87 @@ class TestContractFixturesValidation:
         assert "magic" in api_err.message.lower()
 
 
+class TestWireSerialization:
+    """Check canonical output keys and fork DTO validation boundaries."""
+
+    @pytest.mark.parametrize(
+        ("fixture", "model_type", "expected_key", "forbidden_key"),
+        [
+            ("metadata_batch_request.json", GrimmlinkMetadataSyncRequest, "deviceId", "device_id"),
+            ("reading_session_single_request.json", GrimmlinkReadingSessionSingleRequest, "deviceId", "device_id"),
+            ("reading_session_batch_request.json", GrimmlinkReadingSessionBatchRequest, "deviceId", "device_id"),
+            ("progress_put_request_reflowable.json", KoreaderProgressPayload, "bookHash", "book_hash"),
+            ("progress_put_request_pdf.json", KoreaderProgressPayload, "currentPage", "current_page"),
+        ],
+    )
+    def test_canonical_wire_keys(
+        self, fixture: str, model_type: type, expected_key: str, forbidden_key: str
+    ) -> None:
+        payload = model_type.model_validate(load_fixture(fixture)).model_dump(
+            by_alias=True, exclude_unset=True
+        )
+        assert expected_key in payload
+        assert forbidden_key not in payload
+
+    def test_legacy_input_aliases_serialize_to_fork_keys(self) -> None:
+        metadata = GrimmlinkMetadataSyncRequest.model_validate({"device_id": "reader-1"})
+        assert metadata.model_dump(by_alias=True, exclude_unset=True) == {"deviceId": "reader-1"}
+
+        progress = KoreaderProgressPayload.model_validate(
+            {"deviceId": "reader-1", "book_hash": "hash-1", "book_id": 42}
+        )
+        assert progress.model_dump(by_alias=True, exclude_unset=True) == {
+            "device_id": "reader-1",
+            "bookHash": "hash-1",
+            "bookId": 42,
+        }
+
+    def test_shelf_removal_does_not_invent_success(self) -> None:
+        fixture = load_fixture("shelf_removal_regular_response.json")
+        serialized = GrimmlinkShelfRemovalResponse.model_validate(fixture).model_dump(
+            by_alias=True, exclude_unset=True
+        )
+        assert serialized == fixture
+
+    def test_batch_response_does_not_invent_counts(self) -> None:
+        fixture = load_fixture("reading_session_batch_response.json")
+        serialized = GrimmlinkReadingSessionBatchResponse.model_validate(fixture).model_dump(
+            by_alias=True, exclude_unset=True
+        )
+        assert serialized == fixture
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"sessions": [{"startTime": "a", "endTime": "b", "durationSeconds": 1}]},
+            {"bookId": 42, "sessions": []},
+            {"bookId": 42, "sessions": [{"startTime": "a", "endTime": "b"}]},
+            {
+                "bookId": 42,
+                "sessions": [{"startTime": "a", "endTime": "b", "durationSeconds": 1}] * 501,
+            },
+        ],
+    )
+    def test_batch_rejects_invalid_fork_payloads(self, payload: dict[str, Any]) -> None:
+        with pytest.raises(ValidationError):
+            GrimmlinkReadingSessionBatchRequest.model_validate(payload)
+
+    def test_single_requires_duration(self) -> None:
+        with pytest.raises(ValidationError):
+            GrimmlinkReadingSessionSingleRequest.model_validate(
+                {"bookId": 42, "startTime": "a", "endTime": "b"}
+            )
+
+    def test_by_hash_fixture_uses_bookfile_dto_fields(self) -> None:
+        fixture = load_fixture("books_by_hash_response.json")
+        assert "currentHash" not in fixture["primaryFile"]
+        assert "initialHash" not in fixture["primaryFile"]
+        book = OfficialBookDTO.model_validate(fixture)
+        assert book.primaryFile is not None
+        assert book.primaryFile.bookId == book.id
+        assert book.model_dump(exclude_unset=True) == fixture
+
+
 class TestRouteContractRegistry:
     """Verify that all 19 frozen route patterns are registered in the FastAPI app."""
 
@@ -319,6 +401,30 @@ class TestRouteContractRegistry:
         for method, path in expected_routes:
             assert path in openapi_paths, f"Missing route path: {path}"
             assert method.lower() in openapi_paths[path], f"Missing method {method} on {path}"
+
+    def test_openapi_uses_fork_request_and_response_dtos(self) -> None:
+        from grimmlink_adapter.main import app
+
+        schema = app.openapi()
+        paths = schema["paths"]
+        by_hash = paths["/api/grimmlink/v1/books/by-hash/{book_hash}"]["get"]
+        assert by_hash["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+            "/OfficialBookDTO"
+        )
+
+        single = paths["/api/grimmlink/v1/reading-sessions"]["post"]
+        assert single["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+            "/GrimmlinkReadingSessionSingleRequest"
+        )
+        single_schema = schema["components"]["schemas"]["GrimmlinkReadingSessionSingleRequest"]
+        assert {"bookId", "startTime", "endTime", "durationSeconds"} <= set(
+            single_schema["required"]
+        )
+
+        batch_schema = schema["components"]["schemas"]["GrimmlinkReadingSessionBatchRequest"]
+        assert {"bookId", "sessions"} <= set(batch_schema["required"])
+        assert batch_schema["properties"]["sessions"]["minItems"] == 1
+        assert batch_schema["properties"]["sessions"]["maxItems"] == 500
 
     @pytest.mark.asyncio
     async def test_auth_rejection_on_all_protected_routes(self, test_client: AsyncClient) -> None:

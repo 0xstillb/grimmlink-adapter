@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from grimmlink_adapter.models.grimmlink import GrimmlinkReadingSessionItemRequest
+from grimmlink_adapter.models.grimmlink import GrimmlinkReadingSessionSingleRequest
 from grimmlink_adapter.models.internal import BookHashEntry, CachedToken
 from grimmlink_adapter.services.session_service import (
     SessionService,
@@ -131,10 +131,11 @@ async def test_migrations_raise_on_missing_or_empty_dir(tmp_path: Path) -> None:
 async def test_session_idempotency_not_created_in_scaffold() -> None:
     """Issue 2 fix verification: No idempotency key must be created when session recording is not implemented."""
     service = SessionService()
-    req = GrimmlinkReadingSessionItemRequest(
+    req = GrimmlinkReadingSessionSingleRequest(
         bookId=999,
         startTime="2026-09-26T12:00:00Z",
         endTime="2026-09-26T12:30:00Z",
+        durationSeconds=1800,
     )
     with pytest.raises(HTTPException) as exc_info:
         await service.record_session(req, username="test_user")
