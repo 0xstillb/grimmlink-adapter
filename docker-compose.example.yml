@@ -1,0 +1,50 @@
+services:
+  grimmlink-adapter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: grimmlink-adapter
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      - ADAPTER_HOST=0.0.0.0
+      - ADAPTER_PORT=8085
+      - GRIMMORY_BASE_URL=http://grimmory:6060
+      - SQLITE_DB_PATH=/app/data/grimmlink_adapter.db
+      - LOG_LEVEL=INFO
+      - OFFICIAL_CLIENT_TIMEOUT=15.0
+      - OFFICIAL_CLIENT_MAX_RETRIES=3
+    volumes:
+      - adapter_data:/app/data
+    networks:
+      - grimmory_network
+    depends_on:
+      - grimmory
+
+  # Reference definition for stock Official Grimmory (unmodified)
+  grimmory:
+    image: ghcr.io/grimmory-tools/grimmory:v3.5.0
+    container_name: grimmory
+    restart: unless-stopped
+    ports:
+      - "6060:6060"
+    environment:
+      - PORT=6060
+    volumes:
+      - grimmory_data:/app/data
+      - grimmory_books:/books
+    networks:
+      - grimmory_network
+
+volumes:
+  adapter_data:
+    driver: local
+  grimmory_data:
+    driver: local
+  grimmory_books:
+    driver: local
+
+networks:
+  grimmory_network:
+    driver: bridge
