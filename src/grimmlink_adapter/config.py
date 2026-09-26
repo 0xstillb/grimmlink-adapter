@@ -38,8 +38,21 @@ class Settings(BaseSettings):
     OFFICIAL_CLIENT_TIMEOUT: float = Field(
         default=15.0, description="HTTP client request timeout in seconds"
     )
+    OFFICIAL_CLIENT_CONNECT_TIMEOUT: float = Field(
+        default=5.0, description="HTTP client connect timeout in seconds"
+    )
     OFFICIAL_CLIENT_MAX_RETRIES: int = Field(
         default=3, description="Maximum retry count for idempotent upstream requests"
+    )
+    OFFICIAL_CLIENT_BACKOFF_FACTOR: float = Field(
+        default=0.5, description="Initial backoff multiplier in seconds for retryable errors"
+    )
+    OFFICIAL_CLIENT_VERIFY_SSL: bool = Field(
+        default=True, description="Enforce SSL/TLS certificate verification"
+    )
+    OFFICIAL_CLIENT_CA_BUNDLE: str | None = Field(
+        default=None,
+        description="Path to custom CA certificate bundle for self-signed certificates",
     )
 
     # OPF Ingestion & Fallback options (Session 03A)

@@ -6,6 +6,8 @@ leak into logs at any log level (DEBUG through CRITICAL).
 
 import logging
 import re
+from collections.abc import Mapping
+from typing import Any
 
 # Regular expressions targeting sensitive patterns in text/JSON
 SENSITIVE_PATTERNS = [
@@ -13,14 +15,20 @@ SENSITIVE_PATTERNS = [
     (re.compile(r"(Authorization\s*[:=]\s*(?:Bearer|Basic)\s+)[^\s,'\"]+", re.IGNORECASE), r"\1[REDACTED]"),
     # GrimmLink MD5 key header
     (re.compile(r"((?:x-auth-key|auth_key|x_auth_key)\s*[:=]\s*)[^\s,'\"]+", re.IGNORECASE), r"\1[REDACTED]"),
-    # JSON password, token fields
+    # JSON password, token fields (snake_case and camelCase)
     (
-        re.compile(r'("(?:password|access_token|refresh_token|token|secret|key)"\s*:\s*")[^"]+(")', re.IGNORECASE),
+        re.compile(
+            r'("(?:password|access_token|accessToken|refresh_token|refreshToken|token|secret|key|md5_key|x-auth-key)"\s*:\s*")[^"]+(")',
+            re.IGNORECASE,
+        ),
         r'\1[REDACTED]\2',
     ),
     # Key-value pairs in query strings or strings (e.g. password=xyz)
     (
-        re.compile(r"((?:password|access_token|refresh_token|x-auth-key)\s*=\s*)[^\s&,'\"]+", re.IGNORECASE),
+        re.compile(
+            r"((?:password|access_token|accessToken|refresh_token|refreshToken|token|secret|key|x-auth-key|x_auth_key)\s*=\s*)[^\s&,'\"]+",
+            re.IGNORECASE,
+        ),
         r"\1[REDACTED]",
     ),
     # 32-character hexadecimal MD5 auth tokens if preceded by key-like indicators
@@ -29,6 +37,35 @@ SENSITIVE_PATTERNS = [
         r"\1[REDACTED]",
     ),
 ]
+
+SENSITIVE_HEADER_KEYS = frozenset({
+    "authorization",
+    "x-auth-key",
+    "cookie",
+    "set-cookie",
+    "x-api-key",
+    "proxy-authorization",
+})
+
+
+def redact_headers(headers: Mapping[str, Any] | None) -> dict[str, str]:
+    """Return a dictionary of headers with sensitive values masked."""
+    if not headers:
+        return {}
+    redacted: dict[str, str] = {}
+    for k, v in headers.items():
+        k_lower = str(k).lower()
+        val_str = str(v)
+        if k_lower in SENSITIVE_HEADER_KEYS or any(
+            term in k_lower for term in ("token", "secret", "auth-key", "password")
+        ):
+            if k_lower == "authorization" and val_str.lower().startswith("bearer "):
+                redacted[str(k)] = "Bearer [REDACTED]"
+            else:
+                redacted[str(k)] = "[REDACTED]"
+        else:
+            redacted[str(k)] = val_str
+    return redacted
 
 
 def mask_secret(text: str) -> str:

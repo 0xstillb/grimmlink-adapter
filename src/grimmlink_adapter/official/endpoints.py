@@ -1,5 +1,8 @@
 """Endpoint constants and URI builders for Official Grimmory HTTP API."""
 
+# Health & Status
+OFFICIAL_HEALTHCHECK = "/api/v1/healthcheck"
+
 # Authentication & Users
 OFFICIAL_AUTH_LOGIN = "/api/v1/auth/login"
 OFFICIAL_AUTH_REFRESH = "/api/v1/auth/refresh"
