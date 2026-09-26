@@ -2,8 +2,8 @@
 
 - **Current Session:** `Session 01 — Freeze Existing GrimmLink Contract`
 - **Implementer:** Gemini Flash 3.8
-- **Reviewer:** GPT-5.6 Sol High
-- **Current Lifecycle State:** `STOPPED — Session 01 implementation & verification complete — Ready for Sol Review Gate`
+- **Reviewer:** Codex (Session 01 contract gate)
+- **Current Lifecycle State:** `Session 01 focused fixes applied — final review gate complete`
 - **Timestamp:** 2026-09-26T13:45:00+07:00
 
 ---
@@ -37,10 +37,10 @@ Created comprehensive contract documentation covering all 19 endpoints across th
 18. `POST /api/grimmlink/v1/reading-sessions` (single session 202 Accepted)
 19. `POST /api/grimmlink/v1/reading-sessions/batch` (batch ingestion with 6-tuple duplicate detection)
 
-Every field in request and response DTOs is explicitly tagged as `REQUIRED`, `OPTIONAL`, `DERIVED`, or `LEGACY`.
+The document defines the field classification taxonomy and labels key route fields. Remaining DTO fields should be checked against the pinned source when implemented in later sessions.
 
 ### Deliverable B: Wire Fixtures (`tests/contract/fixtures/`)
-Created 26 JSON fixture files capturing authentic wire payloads:
+Created 26 representative JSON fixture files. The review corrected source-incompatible fields in the by-hash and session-batch fixtures:
 - `auth_response.json`
 - `capabilities_response.json`
 - `books_by_hash_response.json`
@@ -60,8 +60,8 @@ Created 26 JSON fixture files capturing authentic wire payloads:
 - `error_auth_401.json`, `error_api_400.json`, `error_fastapi_detail.json`
 
 ### Deliverable C: Executable Contract Tests (`tests/contract/test_legacy_contract_freeze.py`)
-Implemented 20 executable contract tests validating:
-- Full Pydantic deserialization and schema fidelity for all 26 fixtures.
+Implemented executable contract tests validating:
+- Pydantic deserialization for the fixture set, plus focused canonical serialization and invalid-payload checks added during review.
 - Strict route registry coverage confirming all 19 frozen route patterns are registered in FastAPI OpenAPI schema.
 - Unauthenticated rejection invariant (`401 Unauthorized`) across all protected endpoints.
 - Capabilities matrix public accessibility.
@@ -69,7 +69,7 @@ Implemented 20 executable contract tests validating:
 
 ---
 
-## 2. Verification Evidence
+## 2. Original Gemini Verification Evidence
 
 ### Pytest Execution (`uv run --no-sync pytest`)
 ```text
@@ -103,10 +103,27 @@ tests\unit\test_security_masking.py .......                              [100%]
 1. `a6bf88a` `feat(contract): freeze Pydantic models and wire fixtures for legacy GrimmLink contract`
 2. `13356b1` `test(contract): add executable contract tests for frozen GrimmLink routes and fixtures`
 3. `cbe0ac9` `docs(contract): create LEGACY_GRIMMLINK_CONTRACT documentation`
+4. `242aaf7` `docs(handoff): record Session 01 contract freeze and verification results`
+5. `5d0df40` `fix(contract): align DTOs, fixtures, and contract tests with pinned fork specifications`
 
 ---
 
-## 4. Current Lifecycle State
+## 4. Original Gemini Handoff State
 
-- **`STOPPED — Session 01 contract freeze complete — Ready for Sol Gate Review`**
-- All 61 tests passing. No regressions to Session 00 security or 501 scaffold safety. Ready for Sol review before proceeding to Session 02 (Auth & Official Client).
+Gemini stopped after its 61 passing tests and requested the review gate. Section 5 records the subsequent review fixes and current status.
+
+---
+
+## 5. Session 01 Review Fixes (2026-09-26)
+
+**Gate verdict: APPROVE for Session 01 contract freeze after focused fixes.** This verdict covers the frozen contract and scaffold shape. The later implementation sessions still own upstream behavior, access checks, and state mutations.
+
+- Corrected Pydantic input aliases so metadata and session output keeps canonical `deviceId`; progress output keeps canonical camelCase book/page keys and the fork's `device_id`.
+- Aligned reading-session single and batch request types with the pinned fork DTOs. Batch now requires `bookId`, 1–500 sessions, and each item's `durationSeconds`; the single route now exposes the separate single-request DTO.
+- Changed the by-hash route schema to the fork's full `Book` DTO. Removed fictitious `BookFile.currentHash` and `initialHash` fixture fields. Removed the invented shelf-removal `success` default and unsupported batch-response fields.
+- Reconciled the fork API guide's PDF-specific route references with its six actual GrimmLink controllers and the pinned client. PDF progress uses generic `/syncs/progress`; no PDF-specific route was added.
+- Added focused round-trip, invalid-batch, and OpenAPI tests. Existing scaffold routes continue to return 501 for unimplemented authenticated operations.
+
+**Verification:** `uv run --no-sync pytest -q` — 76 passed; `uv run --no-sync ruff check .` — passed; `uv run --no-sync mypy src` — passed; `git diff --check` — passed.
+
+**Next:** Session 02 may begin under its own auth review gate. No merge or production writes were performed as part of this repair.

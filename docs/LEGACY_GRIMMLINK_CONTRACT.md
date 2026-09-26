@@ -1,6 +1,6 @@
 # Legacy GrimmLink Wire Contract Specification
 
-- **Document Version:** `1.0.0`
+- **Document Version:** `1.0.1`
 - **Frozen In Session:** `Session 01 — Freeze Existing GrimmLink Contract`
 - **Protocol Namespace:** `/api/grimmlink/v1`
 - **Baseline Implementations:**
@@ -59,6 +59,12 @@ The client parses errors using the following precedence:
 1. `{"status": "error", "message": "<msg>"}` (Authentication filter shape)
 2. `{"status": <int>, "message": "<msg>", "timestamp": "<iso>", "details": [...]}` (Spring Boot GlobalExceptionHandler shape)
 3. `{"detail": "<msg>"}` (FastAPI standard error shape)
+
+---
+
+## 2.4 Documented PDF Routes Versus Active Controllers
+
+The pinned fork's [API guide](https://github.com/0xstillb/grimmory/blob/704f8c26794da923ea8ed96cfb1e6405e43f1241/docs/GRIMMLINK-V1-API.md) lists `GET/PUT /books/{bookId}/pdf-progress`. Its [six GrimmLink controllers](https://github.com/0xstillb/grimmory/tree/704f8c26794da923ea8ed96cfb1e6405e43f1241/backend/src/main/java/org/booklore/grimmlink/controller) do not register those routes. The pinned [KOReader client](https://github.com/0xstillb/GrimmLink/blob/c6114075917a86d3a5d150f484adfa76a692bd75/grimmlink.koplugin/grimmlink_api_client.lua) sends PDF progress through the generic `/syncs/progress` routes. The 19 frozen routes describe the implemented controller surface; PDF page semantics remain part of generic progress.
 
 ---
 
@@ -194,8 +200,7 @@ Returns full `OfficialBookDTO` representation:
     "bookId": 42,
     "fileName": "The Count of Monte Cristo.epub",
     "bookType": "EPUB",
-    "fileSizeKb": 1250,
-    "currentHash": "d41d8cd98f00b204e9800998ecf8427e"
+    "fileSizeKb": 1250
   }
 }
 ```
@@ -206,8 +211,9 @@ Returns full `OfficialBookDTO` representation:
 | `id` | `REQUIRED` | Integer | Canonical book ID |
 | `title` | `OPTIONAL` | String | Book title |
 | `primaryFile.id` | `OPTIONAL` | Integer | Canonical file ID |
-| `primaryFile.currentHash` | `REQUIRED` | String | MD5 fingerprint matching request |
 | `primaryFile.fileSizeKb` | `OPTIONAL` | Integer | File size in KB |
+
+The fork resolves the hash internally. Its `BookFile` response DTO has no `currentHash` or `initialHash` field, so clients must not require either in this response.
 
 ---
 
@@ -261,7 +267,7 @@ Returns full `OfficialBookDTO` representation:
 #### Request Fields
 | Field | Classification | Type | Notes |
 |:---|:---|:---|:---|
-| `status` | `REQUIRED` | String | Read status. `"ON_HOLD"` normalizes to `"PAUSED"`, `"COMPLETED"` normalizes to `"READ"`. |
+| `status` | `OPTIONAL` | String | Read status. `"ON_HOLD"` normalizes to `"PAUSED"`, `"COMPLETED"` normalizes to `"READ"`. |
 
 #### Response (`200 OK`)
 ```json
@@ -722,7 +728,7 @@ Array of `GrimmlinkBookSummary` objects:
 - **Method:** `POST`
 - **Path:** `/api/grimmlink/v1/reading-sessions`
 - **Auth:** `x-auth-user` + `x-auth-key` or Bearer (`REQUIRED`)
-- **Description:** Records a single reading session. Fallback when batch API is unavailable.
+- **Description:** Records a single reading session. Fallback when batch API is unavailable. The fork requires `bookId`, `startTime`, `endTime`, and `durationSeconds`.
 
 #### Request Body
 ```json
@@ -756,7 +762,7 @@ HTTP status `202 Accepted` with empty body.
 - **Method:** `POST`
 - **Path:** `/api/grimmlink/v1/reading-sessions/batch`
 - **Auth:** `x-auth-user` + `x-auth-key` or Bearer (`REQUIRED`)
-- **Description:** Primary session upload endpoint. Ingests up to 100 sessions in one request with server-side duplicate detection.
+- **Description:** Primary session upload endpoint. Requires `bookId`, a nonempty `sessions` array (maximum 500), and `durationSeconds` on each item. The server applies duplicate detection. The nested items also require `startTime` and `endTime`.
 
 #### Request Body
 ```json
@@ -776,9 +782,7 @@ HTTP status `202 Accepted` with empty body.
       "endProgress": 41.2,
       "progressDelta": 1.2,
       "startLocation": "/6/4[chap03]!/4/2/8/1:0",
-      "endLocation": "/6/4[chap03]!/4/2/9/1:10",
-      "currentPage": 120,
-      "totalPages": 300
+      "endLocation": "/6/4[chap03]!/4/2/9/1:10"
     }
   ]
 }
