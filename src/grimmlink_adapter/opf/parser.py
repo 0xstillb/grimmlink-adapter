@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 import xml.etree.ElementTree as ET
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -91,7 +91,7 @@ def parse_opf(opf_path: Path, root: Path | None = None) -> OPFDocument:
     subtitle = _meta_value(metadata_element, "title-type", "subtitle")
     authors = values.get("creator", [])
     publisher = _first(values, "publisher")
-    published_date = _first(values, "date")
+    published_date = _normalize_published_date(_first(values, "date"))
     description = _first(values, "description")
     language = _first(values, "language")
     categories = values.get("subject", [])
@@ -160,6 +160,23 @@ def _text(element: ET.Element) -> str:
 
 def _first(values: dict[str, list[str]], key: str) -> str | None:
     return values.get(key, [None])[0]
+
+
+def _normalize_published_date(value: str | None) -> str | None:
+    """Match Grimmory's OPF date handling for its LocalDate API field."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    if re.fullmatch(r"\d{4}", normalized):
+        return f"{normalized}-01-01"
+    if re.match(r"^\d{4}-\d{2}-\d{2}.*$", normalized):
+        date_value = normalized[:10]
+        try:
+            date.fromisoformat(date_value)
+        except ValueError:
+            return None
+        return date_value
+    return None
 
 
 def _meta_value(parent: ET.Element, name: str, value: str) -> str | None:

@@ -46,7 +46,27 @@ def test_parse_normalizes_metadata_and_cover(tmp_path: Path) -> None:
     assert document.metadata.series is not None
     assert document.metadata.series.number == 1
     assert document.metadata.isbn13 == "9781234567897"
+    assert document.metadata.published_date == "2026-09-27"
     assert document.cover_path == (tmp_path / "cover.jpg").resolve()
+
+
+@pytest.mark.parametrize(
+    ("opf_date", "expected"),
+    [
+        ("2018-10-14T17:00:00+00:00", "2018-10-14"),
+        ("2018", "2018-01-01"),
+        ("not-a-date", None),
+    ],
+)
+def test_published_date_matches_grimmory_local_date_parsing(
+    tmp_path: Path, opf_date: str, expected: str | None,
+) -> None:
+    opf = tmp_path / "metadata.opf"
+    opf.write_text(OPF.replace("2026-09-27", opf_date), encoding="utf-8")
+
+    document = parse_opf(opf, root=tmp_path)
+
+    assert document.metadata.published_date == expected
 
 
 def test_discovery_is_deterministic_and_rejects_ambiguity(tmp_path: Path) -> None:
