@@ -304,3 +304,26 @@ api_preferred + sidecar fallback
 Do not modify Official Grimmory.
 Do not direct-write Grimmory DB.
 Do not retire Grimmory Bridge yet; keep it as migration/recovery tool until E2E cutover passes.
+
+## Runtime acceptance record — 2026-09-27
+
+**Positive canary: PASS.** Commit `3edab2c64511f1f2c2ef689b2a86459dac535fbc`
+was tested from a clean detached worktree using image
+`grimmlink-adapter:3edab2c` (`sha256:78ef0d562f47b2e4e12b55c1a6ea01af29430e585575624c84ad1d35bb6fdd1c`).
+For `bookId=25` / `bookFileId=25`, exact hash and Official identity passed.
+The normalized OPF date `2018-10-14` matched Official; only `description`
+differed. One `api_only` PUT was verified by read-only
+`GET /api/v1/books/25?withDescription=true`; the returned description exactly
+matched the OPF, and no other field changed.
+
+The source SHA-256 remained
+`04f1e1ff23146423f607da0656af7586887e4326f87d6799270b83a11a1a8aee`; OPF
+SHA-256 remained
+`ce6613fdac1023d3ad09cd88a1da68706a0c7e9b5f00f461b1d9ee902fc8020a`.
+No direct Grimmory DB write, production Adapter SQLite write, sidecar import,
+cover upload, or rescan occurred. An earlier GET without `withDescription=true`
+hid the saved description. A rollback attempt was rejected because the harness
+sent `clearFlags` as an array; it was not retried. The verified current value
+is the intended OPF description. The production container remains on
+`grimmlink-adapter:355a197-md5fix`; the canary image was not deployed. Runtime
+canary is closed; implementation review remains before merge.

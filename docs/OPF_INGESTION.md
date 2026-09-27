@@ -52,6 +52,31 @@ fallbackable only when its response explicitly identifies an unsupported,
 unknown, or unrecognized field. Auth, permission, lock, identity, and other
 client errors stop without fallback.
 
-No Pi end-to-end evidence is included. Before merge, review the pinned Grimmory
-payload/settings/lock contracts and run an authorized Pi canary. Tests and
-static checks have not been run for this review repair.
+## Pi positive canary — 2026-09-27
+
+Status: **PASS**. The canary ran from commit
+`3edab2c64511f1f2c2ef689b2a86459dac535fbc`, image
+`grimmlink-adapter:3edab2c`, digest
+`sha256:78ef0d562f47b2e4e12b55c1a6ea01af29430e585575624c84ad1d35bb6fdd1c`.
+
+- Target: `bookId=25`, `bookFileId=25`; exact hash and Official identity passed.
+- Only `description` differed; the normalized OPF date `2018-10-14` matched
+  Official.
+- One `api_only` ingestion PUT returned success. Read-back with
+  `GET /api/v1/books/25?withDescription=true` returned the exact OPF
+  description. The earlier GET omitted this query parameter, and Grimmory
+  intentionally omits description unless it is set.
+- Source SHA-256 stayed
+  `04f1e1ff23146423f607da0656af7586887e4326f87d6799270b83a11a1a8aee`; OPF
+  SHA-256 stayed
+  `ce6613fdac1023d3ad09cd88a1da68706a0c7e9b5f00f461b1d9ee902fc8020a`.
+- No other metadata field changed. No direct Grimmory DB write, production
+  Adapter SQLite write, sidecar import, cover upload, or rescan occurred.
+- A rollback attempt was rejected because `clearFlags` was serialized as an
+  array, while Grimmory expects an object. No retry was made. The current
+  description is the intended OPF value.
+- The production container remains on `grimmlink-adapter:355a197-md5fix`;
+  the canary image was not deployed.
+
+This closes the Session 03A runtime canary. The implementation review gate
+still applies before merge.

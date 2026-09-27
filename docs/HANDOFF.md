@@ -2,7 +2,7 @@
 
 - **Current Session:** Session 03A — OPF API with Sidecar Fallback
 - **Implementer:** Codex implementation; Sol deep review pending
-- **Current Lifecycle State:** Session 03A implementation locally verified; merge remains gated on review
+- **Current Lifecycle State:** Session 03A Pi positive canary passed; implementation review remains before merge
 - **Timestamp:** 2026-09-27
 
 ---
@@ -154,9 +154,24 @@ ownership markers and use atomic replacement. Fallback is controlled by
 messages. The book, OPF, and cover source fingerprints are checked after work.
 
 `api_only`, `api_preferred`, and `sidecar_only` remain supported, with dry-run
-and SQLite deduplication state. No tests, static checks, or Pi canary were run
-for this repair. The prior 03A test evidence does not verify these latest
-changes. Sol review and authorized runtime validation remain required before
+and SQLite deduplication state. Pi positive canary passed on commit
+`3edab2c64511f1f2c2ef689b2a86459dac535fbc` (image `grimmlink-adapter:3edab2c`,
+digest `sha256:78ef0d562f47b2e4e12b55c1a6ea01af29430e585575624c84ad1d35bb6fdd1c`).
+For `bookId=25` / `bookFileId=25`, exact hash and Official identity passed; the
+OPF date normalized to `2018-10-14`; only `description` differed. One `api_only`
+ingestion PUT was followed by read-only
+`GET /api/v1/books/25?withDescription=true`, which returned the exact OPF
+description. The earlier GET omitted that query parameter, so Grimmory
+intentionally omitted description from its response. The source SHA-256 stayed
+`04f1e1ff23146423f607da0656af7586887e4326f87d6799270b83a11a1a8aee`; OPF
+SHA-256 stayed
+`ce6613fdac1023d3ad09cd88a1da68706a0c7e9b5f00f461b1d9ee902fc8020a`.
+No direct Grimmory DB write, production Adapter SQLite write, sidecar import,
+cover upload, or rescan occurred. A rollback attempt was rejected because the
+harness serialized `clearFlags` as an array; no retry was made. The verified
+description is the intended OPF value. The production container remains on
+`grimmlink-adapter:355a197-md5fix`; the canary image was not deployed. The
+Session 03A runtime canary is closed; implementation review remains before
 merge. Grimmory DB writes are not part of this session.
 
 ---
