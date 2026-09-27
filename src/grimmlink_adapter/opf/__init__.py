@@ -1,3 +1,16 @@
-"""OPF discovery, parsing, and normalization package (Session 03A scaffold)."""
+"""OPF discovery, parsing, normalization, and safe sidecar helpers."""
 
-# Scaffold placeholder for Session 03A OPF Ingestion
+from grimmlink_adapter.opf.parser import (
+    AmbiguousOPFError,
+    MalformedOPFError,
+    OPFError,
+    UnsafePathError,
+    discover_opf,
+    file_fingerprint,
+    parse_opf,
+)
+
+__all__ = [
+    "AmbiguousOPFError", "MalformedOPFError", "OPFError", "UnsafePathError",
+    "discover_opf", "file_fingerprint", "parse_opf",
+]

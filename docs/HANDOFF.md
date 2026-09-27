@@ -1,9 +1,9 @@
 # Inter-Session Handoff & Governance
 
-- **Current Session:** Session 03 — Book Identity
-- **Implementer:** Antigravity (Gemini 3.8 Flash); Codex review repair
-- **Current Lifecycle State:** Session 03 review fixes locally verified; Pi deployment canary remains
-- **Timestamp:** 2026-09-26
+- **Current Session:** Session 03A — OPF API with Sidecar Fallback
+- **Implementer:** Codex implementation; Sol deep review pending
+- **Current Lifecycle State:** Session 03A implementation locally verified; merge remains gated on review
+- **Timestamp:** 2026-09-27
 
 ---
 
@@ -135,5 +135,23 @@ current bytes hash to `95b8…`. A 200 for `d654…` would prove DB mapping and
 permission checks but would not prove current file-byte identity. No library
 refresh is required for this canary; choose a file whose DB hash already
 matches its bytes. Runtime deployment and review remain open.
+
+## 6. Session 03A — OPF API with Sidecar Fallback
+
+The adapter now contains a local OPF ingestion service. It discovers and parses
+one deterministic OPF, normalizes canonical metadata, requires a verified exact
+`book_id`, and preserves the source ebook/PDF/CBX bytes. `api_preferred` calls
+Official metadata and cover endpoints first; transport, timeout, 5xx, or the
+documented 422 field-incompatibility response fall back to JSON/JPEG sidecars.
+Authentication failures, permission failures, malformed OPF, ambiguous
+discovery, identity failures, and locked fields stop without fallback.
+`api_only`, `api_preferred`, and `sidecar_only` are supported, with dry-run and
+SQLite deduplication state.
+
+The implementation is covered by the local 03A parser/service tests and the
+full suite. Before merge, Sol must verify the exact pinned Grimmory metadata
+payload, lock semantics, cover multipart contract, API error mapping, and the
+runtime evidence on Pi. No Official Grimmory database write is part of this
+session.
 
 ---

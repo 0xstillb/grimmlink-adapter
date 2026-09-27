@@ -17,6 +17,8 @@ Invariants:
 import asyncio
 import json
 import logging
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -36,7 +38,9 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_AUTH_LOGIN,
     OFFICIAL_AUTH_REFRESH,
     OFFICIAL_BOOK_BY_ID,
+    OFFICIAL_BOOK_COVER_UPLOAD,
     OFFICIAL_BOOK_DOWNLOAD,
+    OFFICIAL_BOOK_METADATA,
     OFFICIAL_HEALTHCHECK,
     OFFICIAL_KOREADER_AUTH,
     OFFICIAL_KOREADER_PROGRESS_HASH,
@@ -349,6 +353,7 @@ class OfficialGrimmoryClient:
         data: Any = None,
         params: Any = None,
         headers: dict[str, str] | None = None,
+        files: Any = None,
         stream: bool = False,
         _is_401_retry: bool = False,
     ) -> httpx.Response:
@@ -397,6 +402,7 @@ class OfficialGrimmoryClient:
             data=data,
             params=params,
             headers=req_headers,
+            files=files,
             stream=stream,
             _is_401_retry=_is_401_retry,
         )
@@ -411,6 +417,7 @@ class OfficialGrimmoryClient:
         data: Any = None,
         params: Any = None,
         headers: dict[str, str] | None = None,
+        files: Any = None,
         stream: bool = False,
         _is_401_retry: bool = False,
     ) -> httpx.Response:
@@ -442,6 +449,7 @@ class OfficialGrimmoryClient:
                     data=data,
                     params=params,
                     headers=headers,
+                    files=files,
                 )
 
                 if stream:
@@ -827,6 +835,63 @@ class OfficialGrimmoryClient:
                 response_body=resp.text,
             )
         return self._parse_json(resp, "GET", url)
+
+    async def update_book_metadata(
+        self,
+        book_id: int,
+        bearer_token: str,
+        payload: dict[str, Any],
+        *,
+        merge_categories: bool = False,
+        replace_mode: str = "REPLACE_WHEN_PROVIDED",
+    ) -> dict[str, Any]:
+        """Update metadata using Official's typed metadata endpoint."""
+        url = OFFICIAL_BOOK_METADATA.format(bookId=book_id)
+        headers = {"Authorization": f"Bearer {bearer_token}"}
+        resp = await self._send_request(
+            method="PUT", path=url, auth_mode=AuthMode.NONE, headers=headers,
+            params={"mergeCategories": str(merge_categories).lower(), "replaceMode": replace_mode},
+            json=payload,
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialAuthError(
+                "Unauthorized metadata update", status_code=resp.status_code,
+                method="PUT", url=url, response_body=resp.text,
+            )
+        if resp.status_code >= 400:
+            raise OfficialBadResponseError(
+                f"Metadata update returned HTTP {resp.status_code}",
+                status_code=resp.status_code, method="PUT", url=url, response_body=resp.text,
+            )
+        return self._parse_json(resp, "PUT", url) if resp.content else {}
+
+    async def upload_book_cover(
+        self, book_id: int, bearer_token: str, cover_path: str,
+    ) -> dict[str, Any]:
+        """Upload a cover without touching the source ebook/PDF."""
+        url = OFFICIAL_BOOK_COVER_UPLOAD.format(bookId=book_id)
+        headers = {"Authorization": f"Bearer {bearer_token}"}
+        try:
+            with open(cover_path, "rb") as cover:
+                filename = Path(cover_path).name
+                content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                resp = await self._send_request(
+                    method="POST", path=url, auth_mode=AuthMode.NONE, headers=headers,
+                    files={"file": (filename, cover, content_type)},
+                )
+        except OSError as exc:
+            raise OfficialTransportError("Unable to read cover source") from exc
+        if resp.status_code in (401, 403):
+            raise OfficialAuthError(
+                "Unauthorized cover upload", status_code=resp.status_code,
+                method="POST", url=url, response_body=resp.text,
+            )
+        if resp.status_code >= 400:
+            raise OfficialBadResponseError(
+                f"Cover upload returned HTTP {resp.status_code}",
+                status_code=resp.status_code, method="POST", url=url, response_body=resp.text,
+            )
+        return self._parse_json(resp, "POST", url) if resp.content else {}
 
     async def get_regular_shelves(self, bearer_token: str) -> list[dict[str, Any]]:
         """Fetch list of regular shelves."""
