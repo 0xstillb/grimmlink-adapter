@@ -1,6 +1,7 @@
 """Regressions for Session 02 review findings."""
 
 import json
+from collections.abc import AsyncGenerator
 
 import httpx
 import pytest
@@ -114,7 +115,7 @@ class TrackedStream(httpx.AsyncByteStream):
     def __init__(self) -> None:
         self.closed = False
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncGenerator[bytes, None]:
         yield b"unavailable"
 
     async def aclose(self) -> None:

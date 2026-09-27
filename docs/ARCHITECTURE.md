@@ -10,7 +10,7 @@
 
 **GrimmLink Adapter** is a standalone, lightweight Python service that acts as an intelligent compatibility bridge between the [GrimmLink](https://github.com/0xstillb/GrimmLink) KOReader plugin and **stock [Official Grimmory](https://github.com/grimmory-tools/grimmory)** (`v3.5.0+`).
 
-By placing this adapter between the e-reader and Grimmory, users can decommission their custom server fork (`0xstillb/grimmory`) without modifying Official Grimmory, without writing directly to Grimmory's database, and without requiring immediate client-side rewrites on e-reader devices.
+By placing this adapter between the e-reader and Grimmory, users can decommission their custom server fork (`0xstillb/grimmory`) without modifying Official Grimmory, without writing directly to Grimmory's database, and without requiring immediate client-side rewrites on e-reader devices. Session 03 permits an optional, exact-hash SELECT lookup with a dedicated read-only MariaDB account.
 
 ```mermaid
 flowchart TD
@@ -29,7 +29,7 @@ flowchart TD
 
     subgraph Upstream ["Stock Official Grimmory (Unmodified ghcr.io Image)"]
         GRIMMORY["Official Grimmory Server\n- /api/v1/auth\n- /api/v1/shelves\n- /api/v1/books\n- /api/v1/books/{id}/metadata (PRIMARY)\n- /api/koreader/syncs/progress\n- /api/v1/reading-sessions"]
-        GDB[("Grimmory Database\n(Internal / Zero Direct Access)")]
+        GDB[("Grimmory Database\n(Session 03 SELECT-only hash lookup)")]
         SIDECAR_IMPORT["Official Sidecar Import All\n(FALLBACK)"]
     end
 
@@ -44,6 +44,7 @@ flowchart TD
     SEC --> SVC
     SVC <--> SQLITE
     SVC --> OFFCLIENT
+    SVC -.->|"Optional exact hash SELECT"| GDB
     OFFCLIENT -->|"Official HTTP/REST Only\nBearer JWT & KOReader Sync"| GRIMMORY
     GRIMMORY --- GDB
 ```
@@ -57,9 +58,9 @@ flowchart TD
    - Zero custom Flyway migrations in Grimmory.
    - Official Grimmory can be updated cleanly using upstream container images (`ghcr.io/grimmory-tools/grimmory`).
 
-2. **Zero Direct Database Access:**
-   - The adapter communicates with Grimmory exclusively through official HTTP REST APIs.
-   - The adapter does not connect to or alter Grimmory's PostgreSQL/H2/SQLite database directly.
+2. **Read-Only Identity Lookup Exception:**
+   - Session 03 may query exact `current_hash` and `initial_hash` from Grimmory MariaDB with a dedicated SELECT-only account.
+   - The adapter never writes to Grimmory's database; protected book detail and access still use Official HTTP APIs.
 
 3. **Role of Adapter SQLite:**
    - SQLite in the adapter serves strictly as an **auxiliary cache, outbox queue, and idempotency store**.
