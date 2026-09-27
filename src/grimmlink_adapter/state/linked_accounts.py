@@ -41,6 +41,23 @@ class LinkedAccountStore:
             return LinkedAccount(**dict(row)) if row else None
 
     @staticmethod
+    async def get_by_credentials(
+        server: str, username: str, md5_key: str,
+    ) -> LinkedAccount | None:
+        """Find a linked account without storing or exposing the raw MD5 key."""
+        async with get_connection() as conn, conn.execute(
+            """SELECT server, user_id, username, md5_key_digest, access_token, refresh_token
+               FROM linked_accounts WHERE server = ? AND username = ?""",
+            (server, username),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        for row in rows:
+            account = LinkedAccount(**dict(row))
+            if account.matches(username, md5_key):
+                return account
+        return None
+
+    @staticmethod
     async def put(account: LinkedAccount) -> None:
         async with get_connection() as conn:
             await conn.execute(
