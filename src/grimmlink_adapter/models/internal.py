@@ -67,3 +67,18 @@ class BookHashEntry(BaseModel):
     filename: str | None = None
     title: str | None = None
     cached_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ManagedFileRecord(BaseModel):
+    """Local file marker used by the conservative shelf cleanup guard."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    owner_key: str = "default"
+    book_id: int
+    book_file_id: int = 0
+    tracked_path: str
+    downloaded_by_grimmlink: bool = False
+    provider_reference_count: int = 0
+    expected_size: int | None = None
+    cached_at: datetime = Field(default_factory=datetime.utcnow)

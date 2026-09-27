@@ -111,14 +111,27 @@ async def test_magic_shelf_removal_rejection_invariant(test_client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_regular_shelf_removal_returns_501_in_scaffold(test_client: AsyncClient) -> None:
-    """Issue 2 fix verification: Shelf removal mutation returns 501 in scaffold."""
+async def test_regular_shelf_removal_calls_official_mutation(
+    test_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regular removal returns the frozen success payload after Official succeeds."""
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.shelf_service.get_official_bearer",
+        AsyncMock(return_value="verified"),
+    )
+    assign = AsyncMock(return_value={})
+    monkeypatch.setattr(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.assign_shelves_to_books",
+        assign,
+    )
     resp = await test_client.post(
         "/api/grimmlink/v1/shelves/regular/1/books/42/remove",
         headers=AUTH_HEADERS,
     )
-    assert resp.status_code == 501
-    assert "not supported in session 00 scaffold" in resp.json()["detail"].lower()
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "removed"
+    assign.assert_awaited_once()
 
 
 @pytest.mark.asyncio

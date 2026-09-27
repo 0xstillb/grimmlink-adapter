@@ -188,8 +188,8 @@ scans have identical book IDs and primary file IDs. Each scan requires
 item counts. A request failure, malformed page, duplicate book ID, or changed
 membership fails the read rather than exposing a partial snapshot. Session 05
 must revalidate before any cleanup because Official does not provide an atomic
-snapshot token. Magic membership remains rule-derived and all mutation routes
-remain disabled.
+snapshot token. Magic membership remains rule-derived; only regular shelf
+unassignment is enabled in Session 05.
 
 Official emits the same zero-total response for a genuinely empty magic shelf
 and for a page whose filtered content hides later books. The adapter therefore
@@ -231,13 +231,60 @@ direct `seriesName`/`seriesNumber` mapping from Official metadata, and closed
 first-read stream failures. Tests exercise the real app summary shape,
 inconsistent page metadata, duplicate IDs, empty snapshots, and stream errors.
 
-Implementation is complete but has not been merged. **Required Sol Shelf Review
-returned APPROVE with no actionable findings on 2026-09-27.** The reviewer
+Implementation is complete but has been committed on `main` as `dfa36c8`.
+**Required Sol Shelf Review returned APPROVE with no actionable findings on
+2026-09-27.** The reviewer
 confirmed the two matching magic scans, legacy pagination and file fields,
 and the Session 05 revalidation requirement. The known empty magic shelf 502
 remains a documented fail-closed limitation and is not a gate blocker. Include
 the untracked `request_auth.py` and `test_shelf_read_sync.py` in the Session 04
-commit. No Official mutation, local deletion, deployment, or canary was
+commit. No Session 05 mutation, local deletion, deployment, or canary was
 performed.
+
+---
+
+## 8. Session 05 — Shelf Mutation and Safe Cleanup
+
+Regular shelf removal calls Official's bulk `POST /api/v1/books/shelves`
+with `bookIds`, `shelvesToAssign=[]`, and `shelvesToUnassign=[shelfId]`.
+Magic shelves remain rule-derived and reject manual removal with HTTP 400.
+The remote mutation is completed before local ownership is changed. Each
+request has a deterministic outbox/idempotency key; timeout and transport
+failures leave the same action retryable and do not remove local ownership.
+
+Local file deletion is disabled by default. When explicitly enabled, the
+adapter requires a complete successful regular and magic shelf snapshot, no
+remaining shelf ownership across any authenticated owner, an adapter-managed
+file marker registered after a local copy is actually written, zero provider
+references, a matching managed-file root, an unchanged expected size, and
+`downloaded_by_grimmlink=true`. User-owned files and incomplete snapshots are
+retained. The streaming download route does not invent a local path; only an
+explicit managed-copy pipeline may call the registration hook. A failed
+cleanup verification does not undo a successful Official unassignment.
+
+Shelf ownership and managed-file rows are scoped by authenticated owner. A
+complete snapshot replaces only that owner's rows, while deletion checks for
+references from every owner before unlinking a shared path. Completed outbox
+operations are not reused for a later remove/re-add/remove cycle; only pending
+or failed actions reuse the original operation key.
+
+Verification on 2026-09-27:
+
+- `.venv\Scripts\ruff.exe check .` — all checks passed after the Session 05
+  import repair.
+- `.venv\Scripts\mypy.exe src` — no issues in 48 source files.
+- `.venv\Scripts\python.exe -m pytest --basetemp .pytest-tmp-session05-all` —
+  223 passed. Pytest could not update its cache because of workspace
+  permissions.
+- `git diff --check` — passed with Git's expected LF-to-CRLF notices.
+
+Session 05 implementation remains uncommitted. **Mandated Sol deep safety
+review returned APPROVE with no critical findings on 2026-09-27 and merge is
+allowed.** The review confirmed verified user scoping, atomic owner snapshots,
+UUID operation keys, remote-first finalization, global shelf/provider guards,
+and strict managed-file path/size checks. No production Official mutation or
+cleanup was performed during verification. Migration 007 scopes shelf and
+managed-file state by verified Official user identity; cleanup remains opt-in
+and requires the explicit managed-copy registration hook.
 
 ---

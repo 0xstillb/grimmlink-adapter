@@ -89,6 +89,36 @@ async def test_login_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_assign_shelves_posts_frozen_bulk_endpoint() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/books/shelves"
+        assert request.headers["authorization"] == "Bearer verified"
+        assert json.loads(request.read()) == {
+            "bookIds": [42], "shelvesToAssign": [], "shelvesToUnassign": [7],
+        }
+        return httpx.Response(204)
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    assert await client.assign_shelves_to_books([42], [], [7], "verified") == {}
+
+
+@pytest.mark.asyncio
+async def test_assign_shelves_preserves_forbidden_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"error": "forbidden"})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    with pytest.raises(OfficialPermissionError) as caught:
+        await client.assign_shelves_to_books([43], [], [8], "verified")
+    assert caught.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_login_invalid_credentials_401() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": "Bad credentials"})

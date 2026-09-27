@@ -106,6 +106,38 @@ class OutboxManager:
         return results
 
     @staticmethod
+    async def get_by_idempotency_key(idempotency_key: str) -> OutboxAction | None:
+        """Return an existing action so a retry reuses the same outbox item."""
+        async with get_connection() as conn:
+            async with conn.execute(
+                """
+                SELECT id, action_type, payload, idempotency_key, status, retry_count,
+                       max_retries, last_error, created_at, updated_at
+                FROM outbox WHERE idempotency_key = ?
+                """,
+                (idempotency_key,),
+            ) as cursor:
+                row = await cursor.fetchone()
+        if row is None:
+            return None
+        return OutboxAction(
+            id=row["id"], action_type=row["action_type"], payload=json.loads(row["payload"]),
+            idempotency_key=row["idempotency_key"], status=row["status"],
+            retry_count=row["retry_count"], max_retries=row["max_retries"],
+            last_error=row["last_error"], created_at=row["created_at"], updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    async def requeue(item_id: str) -> None:
+        """Make a previously exhausted action eligible for an explicit retry."""
+        async with get_connection() as conn:
+            await conn.execute(
+                "UPDATE outbox SET status = 'PENDING', retry_count = 0, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (item_id,),
+            )
+            await conn.commit()
+
+    @staticmethod
     async def mark_completed(item_id: str) -> None:
         """Mark outbox action as completed."""
         async with get_connection() as conn:

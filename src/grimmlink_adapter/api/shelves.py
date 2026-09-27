@@ -56,7 +56,7 @@ async def remove_book_from_regular_shelf(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> GrimmlinkShelfRemovalResponse:
     """Remove a book from a regular shelf."""
-    return await _shelf_service.remove_book_from_shelf("regular", shelf_id, book_id)
+    return await _shelf_service.remove_book_from_shelf("regular", shelf_id, book_id, creds)
 
 
 @router.post("/{shelf_type}/{shelf_id}/books/{book_id}/remove", response_model=GrimmlinkShelfRemovalResponse)
@@ -67,4 +67,4 @@ async def remove_book_from_shelf_by_type(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> GrimmlinkShelfRemovalResponse:
     """Remove a book from a shelf by type. Refuses magic shelves."""
-    return await _shelf_service.remove_book_from_shelf(shelf_type, shelf_id, book_id)
+    return await _shelf_service.remove_book_from_shelf(shelf_type, shelf_id, book_id, creds)

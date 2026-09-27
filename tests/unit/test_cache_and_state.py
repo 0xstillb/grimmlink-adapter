@@ -1,12 +1,15 @@
 """Unit tests verifying SQLite cache, outbox queue, and multi-shelf ownership safety."""
 
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
 from grimmlink_adapter.models.grimmlink import GrimmlinkReadingSessionSingleRequest
 from grimmlink_adapter.models.internal import BookHashEntry, CachedToken
+from grimmlink_adapter.official.exceptions import OfficialTimeoutError
+from grimmlink_adapter.services import shelf_service as shelf_module
 from grimmlink_adapter.services.session_service import (
     SessionService,
     generate_session_idempotency_key,
@@ -147,15 +150,18 @@ async def test_session_idempotency_not_created_in_scaffold() -> None:
 
 
 @pytest.mark.asyncio
-async def test_shelf_ownership_not_altered_when_unimplemented() -> None:
-    """Issue 2 fix verification: SQLite shelf ownership must NOT be deleted when mutation is unperformed."""
-    service = ShelfService()
+async def test_shelf_ownership_not_altered_when_upstream_mutation_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Upstream failure must leave local ownership untouched."""
+    client = AsyncMock()
+    client.assign_shelves_to_books.side_effect = OfficialTimeoutError("timeout")
+    monkeypatch.setattr(shelf_module, "get_official_bearer", AsyncMock(return_value="verified"))
+    service = ShelfService(client)
     book_id = 777
     await ShelfOwnershipCache.record_ownership(book_id, shelf_id=1, shelf_type="regular")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.remove_book_from_shelf(shelf_type="regular", shelf_id=1, book_id=book_id)
-    assert exc_info.value.status_code == 501
+    assert exc_info.value.status_code == 502
 
     # Invariant: ownership cache must remain untouched
     is_tracked = await ShelfOwnershipCache.is_tracked_in_other_shelves(book_id, exclude_shelf_id=999, exclude_shelf_type="regular")

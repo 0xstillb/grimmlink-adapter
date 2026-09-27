@@ -77,6 +77,16 @@ class Settings(BaseSettings):
         description="Path to custom CA certificate bundle for self-signed certificates",
     )
 
+    # Shelf mutation and local cleanup safety
+    SHELF_CLEANUP_ENABLED: bool = Field(
+        default=False,
+        description="Allow deletion of adapter-managed local files after verified shelf removal",
+    )
+    SHELF_MANAGED_FILE_ROOT: str | None = Field(
+        default=None,
+        description="Optional root directory that managed-file cleanup must remain inside",
+    )
+
     # OPF Ingestion & Fallback options (Session 03A)
     METADATA_INGESTION_MODE: str = Field(
         default="api_preferred",

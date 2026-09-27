@@ -22,7 +22,7 @@ from typing import Any
 import httpx
 
 from grimmlink_adapter.config import settings
-from grimmlink_adapter.models.official import OfficialLoginResponse
+from grimmlink_adapter.models.official import OfficialBulkShelfAssignRequest, OfficialLoginResponse
 from grimmlink_adapter.official.auth import (
     PUBLIC_PATHS,
     AuthMode,
@@ -46,6 +46,7 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_MAGIC_SHELF_BOOKS,
     OFFICIAL_MAGIC_SHELVES,
     OFFICIAL_SHELVES,
+    OFFICIAL_SHELVES_ASSIGN,
     OFFICIAL_USERS_ME,
 )
 from grimmlink_adapter.official.exceptions import (
@@ -1022,6 +1023,49 @@ class OfficialGrimmoryClient:
                 method="GET", url=url,
             )
         return result
+
+    async def assign_shelves_to_books(
+        self,
+        book_ids: list[int],
+        shelves_to_assign: list[int],
+        shelves_to_unassign: list[int],
+        bearer_token: str,
+    ) -> Any:
+        """Apply a regular shelf membership mutation through Official's bulk endpoint."""
+        url = OFFICIAL_SHELVES_ASSIGN
+        payload = OfficialBulkShelfAssignRequest(
+            bookIds=book_ids,
+            shelvesToAssign=shelves_to_assign,
+            shelvesToUnassign=shelves_to_unassign,
+        ).model_dump()
+        resp = await self._send_request(
+            method="POST", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"}, json=payload,
+        )
+        if resp.status_code == 401:
+            raise OfficialAuthError(
+                "Unauthorized shelf mutation", status_code=401, method="POST", url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code == 403:
+            raise OfficialPermissionError(
+                "Shelf mutation forbidden", status_code=403, method="POST", url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code >= 400:
+            raise OfficialBadResponseError(
+                f"Shelf mutation returned HTTP {resp.status_code}", status_code=resp.status_code,
+                method="POST", url=url, response_body=resp.text,
+            )
+        if not resp.content:
+            return {}
+        try:
+            return resp.json()
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise OfficialBadResponseError(
+                "Malformed shelf mutation response", status_code=resp.status_code,
+                method="POST", url=url, response_body=resp.text,
+            ) from exc
 
     async def download_book_stream(self, book_id: int, bearer_token: str) -> httpx.Response:
         """Stream book file download."""

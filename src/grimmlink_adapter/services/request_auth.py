@@ -8,6 +8,17 @@ from grimmlink_adapter.services.auth_service import AuthService
 from grimmlink_adapter.services.linked_auth import LinkedAuthUnavailable, get_linked_bearer
 
 
+class VerifiedBearer(str):
+    """Bearer string carrying the user ID verified by Official auth."""
+
+    user_id: int
+
+    def __new__(cls, value: str, user_id: int) -> "VerifiedBearer":
+        instance = str.__new__(cls, value)
+        instance.user_id = user_id
+        return instance
+
+
 async def get_official_bearer(creds: ClientCredentials) -> str:
     """Verify incoming identities and use a linked JWT for MD5-only requests."""
     from grimmlink_adapter.config import settings
@@ -25,12 +36,13 @@ async def get_official_bearer(creds: ClientCredentials) -> str:
                 )
                 if md5_identity.userId != bearer_identity.userId:
                     raise HTTPException(status_code=401, detail="Credential identities do not match.")
-            return creds.bearer_token
+            return VerifiedBearer(creds.bearer_token, bearer_identity.userId)
 
         identity = await auth.authorize_client(creds)
         if not creds.username or not creds.md5_key:
             raise HTTPException(status_code=401, detail="Authentication credentials are required.")
-        return await get_linked_bearer(server, str(identity.userId), creds.username, creds.md5_key)
+        token = await get_linked_bearer(server, str(identity.userId), creds.username, creds.md5_key)
+        return VerifiedBearer(token, identity.userId)
     except HTTPException:
         raise
     except LinkedAuthUnavailable as exc:
