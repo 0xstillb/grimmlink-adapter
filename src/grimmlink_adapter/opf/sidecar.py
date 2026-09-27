@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import tempfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -84,10 +85,8 @@ def write_sidecars(
     finally:
         for temporary in (cover_temp, metadata_temp):
             if temporary:
-                try:
+                with suppress(FileNotFoundError):
                     os.unlink(temporary)
-                except FileNotFoundError:
-                    pass
     if cover_path:
         return metadata_path, cover_target
     return metadata_path, None

@@ -17,7 +17,6 @@ Invariants:
 import asyncio
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -34,13 +33,13 @@ from grimmlink_adapter.official.auth import (
     validate_auth_separation,
 )
 from grimmlink_adapter.official.endpoints import (
+    OFFICIAL_APP_SETTINGS,
     OFFICIAL_AUTH_LOGIN,
     OFFICIAL_AUTH_REFRESH,
     OFFICIAL_BOOK_BY_ID,
     OFFICIAL_BOOK_DOWNLOAD,
     OFFICIAL_BOOK_METADATA,
     OFFICIAL_BOOK_SIDECAR_IMPORT,
-    OFFICIAL_APP_SETTINGS,
     OFFICIAL_HEALTHCHECK,
     OFFICIAL_KOREADER_AUTH,
     OFFICIAL_KOREADER_PROGRESS_HASH,

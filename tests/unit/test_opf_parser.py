@@ -34,7 +34,7 @@ OPF = """<?xml version="1.0" encoding="utf-8"?>
 
 def test_parse_normalizes_metadata_and_cover(tmp_path: Path) -> None:
     opf = tmp_path / "metadata.opf"
-    (tmp_path / "cover.jpg").write_bytes(b"jpg")
+    (tmp_path / "cover.jpg").write_bytes(b"\xff\xd8\xffcover")
     opf.write_text(OPF, encoding="utf-8")
 
     document = parse_opf(opf, root=tmp_path)
@@ -73,9 +73,9 @@ def test_sidecar_uses_object_cover_and_never_legacy_string(tmp_path: Path) -> No
 
     book = tmp_path / "book.epub"
     book.write_bytes(b"original")
-    cover = tmp_path / "source.png"
-    cover.write_bytes(b"cover")
+    cover = tmp_path / "source.jpg"
+    cover.write_bytes(b"\xff\xd8\xffcover")
     metadata_path, cover_path = write_sidecars(book, metadata, cover)
     assert json.loads(metadata_path.read_text(encoding="utf-8"))["cover"]["path"] == "book.cover.jpg"
-    assert cover_path is not None and cover_path.read_bytes() == b"cover"
+    assert cover_path is not None and cover_path.read_bytes() == b"\xff\xd8\xffcover"
     assert book.read_bytes() == b"original"
