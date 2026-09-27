@@ -83,6 +83,22 @@ class OfficialBookDTO(BaseModel):
     isPhysical: bool | None = None
 
 
+class OfficialAppBookSummaryDTO(BaseModel):
+    """Book summary returned by Official's paginated app shelf endpoint."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    title: str | None = None
+    authors: list[str] | None = None
+    seriesName: str | None = None
+    seriesNumber: float | None = None
+    primaryFileId: int | None = None
+    primaryFileType: str | None = None
+    primaryFileName: str | None = None
+    fileSizeKb: int | None = None
+
+
 class OfficialShelfDTO(BaseModel):
     """Official Grimmory regular shelf representation."""
 

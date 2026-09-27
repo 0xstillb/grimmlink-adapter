@@ -27,6 +27,7 @@ OFFICIAL_APP_SETTINGS = "/api/v1/settings"
 # Shelves
 OFFICIAL_SHELVES = "/api/v1/shelves"
 OFFICIAL_MAGIC_SHELVES = "/api/v1/app/shelves/magic"
+OFFICIAL_MAGIC_SHELF_BOOKS = "/api/v1/app/shelves/magic/{shelfId}/books"
 OFFICIAL_SHELVES_ASSIGN = "/api/v1/shelves/assign"
 
 # Bookmarks, Annotations & Rating

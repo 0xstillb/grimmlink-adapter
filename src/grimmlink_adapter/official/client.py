@@ -43,6 +43,7 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_HEALTHCHECK,
     OFFICIAL_KOREADER_AUTH,
     OFFICIAL_KOREADER_PROGRESS_HASH,
+    OFFICIAL_MAGIC_SHELF_BOOKS,
     OFFICIAL_MAGIC_SHELVES,
     OFFICIAL_SHELVES,
     OFFICIAL_USERS_ME,
@@ -926,29 +927,49 @@ class OfficialGrimmoryClient:
                 url=OFFICIAL_SHELVES,
                 response_body=resp.text,
             )
-        data = resp.json()
-        if isinstance(data, list):
+        data = self._parse_json(resp, "GET", OFFICIAL_SHELVES)
+        if isinstance(data, list) and all(isinstance(item, dict) for item in data):
             return data
         raise OfficialBadResponseError(
-            f"Expected list of shelves, got {type(data).__name__}",
+            "Expected list of shelf objects",
             status_code=resp.status_code,
             method="GET",
             url=OFFICIAL_SHELVES,
             response_body=resp.text,
         )
 
-    async def get_magic_shelves(
-        self, bearer_token: str, page: int = 0, size: int = 50
-    ) -> dict[str, Any]:
-        """Fetch paginated list of magic shelves."""
+    async def get_shelf_books(self, shelf_id: int, bearer_token: str) -> list[dict[str, Any]]:
+        """Fetch the complete unpaginated regular shelf book list."""
+        url = f"{OFFICIAL_SHELVES}/{shelf_id}/books"
+        resp = await self._send_request(
+            method="GET", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialAuthError(
+                "Unauthorized access to shelf books", status_code=resp.status_code,
+                method="GET", url=url, response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch shelf books: HTTP {resp.status_code}",
+                status_code=resp.status_code, method="GET", url=url, response_body=resp.text,
+            )
+        data = self._parse_json(resp, "GET", url)
+        if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+            raise OfficialBadResponseError(
+                "Expected list of shelf books", status_code=resp.status_code, method="GET", url=url,
+            )
+        return data
+
+    async def get_magic_shelves(self, bearer_token: str) -> list[dict[str, Any]]:
+        """Fetch the Official magic shelf summaries."""
         headers = {"Authorization": f"Bearer {bearer_token}"}
-        params = {"page": page, "size": size}
         resp = await self._send_request(
             method="GET",
             path=OFFICIAL_MAGIC_SHELVES,
             auth_mode=AuthMode.NONE,
             headers=headers,
-            params=params,
         )
         if resp.status_code in (401, 403):
             raise OfficialAuthError(
@@ -966,7 +987,41 @@ class OfficialGrimmoryClient:
                 url=OFFICIAL_MAGIC_SHELVES,
                 response_body=resp.text,
             )
-        return self._parse_json(resp, "GET", OFFICIAL_MAGIC_SHELVES)
+        data = self._parse_json(resp, "GET", OFFICIAL_MAGIC_SHELVES)
+        if not isinstance(data, list):
+            raise OfficialBadResponseError(
+                "Expected list of magic shelves",
+                status_code=resp.status_code, method="GET", url=OFFICIAL_MAGIC_SHELVES,
+            )
+        return data
+
+    async def get_magic_shelf_books(
+        self, shelf_id: int, bearer_token: str, page: int = 0, size: int = 100,
+    ) -> dict[str, Any]:
+        """Fetch one page of books belonging to a rule-derived magic shelf."""
+        url = OFFICIAL_MAGIC_SHELF_BOOKS.format(shelfId=shelf_id)
+        resp = await self._send_request(
+            method="GET", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            params={"page": page, "size": size},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialAuthError(
+                "Unauthorized access to magic shelf books", status_code=resp.status_code,
+                method="GET", url=url, response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch magic shelf books: HTTP {resp.status_code}",
+                status_code=resp.status_code, method="GET", url=url, response_body=resp.text,
+            )
+        result = self._parse_json(resp, "GET", url)
+        if not isinstance(result, dict):
+            raise OfficialBadResponseError(
+                "Expected paginated magic shelf response", status_code=resp.status_code,
+                method="GET", url=url,
+            )
+        return result
 
     async def download_book_stream(self, book_id: int, bearer_token: str) -> httpx.Response:
         """Stream book file download."""

@@ -1,8 +1,8 @@
 # Inter-Session Handoff & Governance
 
-- **Current Session:** Session 03A — OPF API with Sidecar Fallback
-- **Implementer:** Codex implementation; Sol deep review pending
-- **Current Lifecycle State:** Session 03A positive canary passed and merged to main
+- **Current Session:** Session 04 — Shelf Read Sync
+- **Implementer:** Codex implementation complete; Sol Shelf Review approved
+- **Current Lifecycle State:** Session 04 gate passed on the unmerged working tree
 - **Timestamp:** 2026-09-27
 
 ---
@@ -174,5 +174,70 @@ description is the intended OPF value. The production container remains on
 03A was merged to `main` at `438fa5a98ad949c836934c11b651aaf61bc58c50` after
 the canary and pre-merge checks passed. Grimmory DB writes are not part of
 this session.
+
+---
+
+## 7. Session 04 — Shelf Read Sync
+
+Regular and magic shelf read/download paths are implemented in the Adapter.
+Regular shelves and their complete book lists use Official's unpaginated APIs;
+magic shelves use the app API and their books are accumulated page by page.
+The adapter reads a magic shelf twice and returns it only when both complete
+scans have identical book IDs and primary file IDs. Each scan requires
+`hasNext=false` with consistent page, size, total, previous/next metadata, and
+item counts. A request failure, malformed page, duplicate book ID, or changed
+membership fails the read rather than exposing a partial snapshot. Session 05
+must revalidate before any cleanup because Official does not provide an atomic
+snapshot token. Magic membership remains rule-derived and all mutation routes
+remain disabled.
+
+Official emits the same zero-total response for a genuinely empty magic shelf
+and for a page whose filtered content hides later books. The adapter therefore
+returns 502 for that ambiguous response; an empty magic shelf cannot currently
+be reported as a successful read without an authoritative upstream count.
+
+Official `Book`/`BookFile` records map to the frozen flat GrimmLink summary,
+including IDs, title, author, series, filename, format, and size. Entries
+without a primary file remain readable with nullable file fields. Regular
+duplicate book/file rows are collapsed; magic duplicate book IDs fail closed so
+an incomplete snapshot cannot feed cleanup. Regular and magic shelves with the
+same numeric ID remain separate because type is preserved. `extension` comes
+from the filename in lowercase; `fileFormat` comes from the Official file type
+in uppercase. Shelf pagination uses a book ID cursor, gives an explicit offset
+precedence, and defaults/clamps the limit to 100.
+
+Shelf and download calls verify incoming Bearer identity; MD5-only callers use
+their locally linked same-user JWT, and requests carrying both credential types
+must resolve to the same Official user. Downloads verify the Official book and
+primary file, reject empty/error-document responses, then stream the binary
+with its filename and content length. First-read timeout, transport, and
+protocol failures close both upstream resources before returning 502. KOReader
+remains responsible for its existing on-device signature and size verification
+before committing a file.
+
+Verification on 2026-09-27:
+
+- `.venv\Scripts\ruff.exe check .` — all checks passed.
+- `.venv\Scripts\mypy.exe src` — no issues in 48 source files.
+- `.venv\Scripts\python.exe -m pytest --basetemp .pytest-tmp-gate-all` — 203
+  passed. Pytest could not update its cache because of workspace permissions.
+- `git diff --check` — passed (Git reported LF-to-CRLF notices for two edited
+  source files).
+
+Review repairs included a dedicated Official `AppBookSummary` normalizer for
+magic shelves, two matching complete scans and strict page/total metadata checks,
+explicit closure of the per-request auth client, preserved 403 shelf errors,
+direct `seriesName`/`seriesNumber` mapping from Official metadata, and closed
+first-read stream failures. Tests exercise the real app summary shape,
+inconsistent page metadata, duplicate IDs, empty snapshots, and stream errors.
+
+Implementation is complete but has not been merged. **Required Sol Shelf Review
+returned APPROVE with no actionable findings on 2026-09-27.** The reviewer
+confirmed the two matching magic scans, legacy pagination and file fields,
+and the Session 05 revalidation requirement. The known empty magic shelf 502
+remains a documented fail-closed limitation and is not a gate blocker. Include
+the untracked `request_auth.py` and `test_shelf_read_sync.py` in the Session 04
+commit. No Official mutation, local deletion, deployment, or canary was
+performed.
 
 ---

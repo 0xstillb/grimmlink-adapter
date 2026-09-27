@@ -37,6 +37,7 @@ from grimmlink_adapter.models.internal import (
     OutboxAction,
 )
 from grimmlink_adapter.models.official import (
+    OfficialAppBookSummaryDTO,
     OfficialBookDTO,
     OfficialBookFileDTO,
     OfficialBulkShelfAssignRequest,
@@ -81,6 +82,7 @@ __all__ = [
     "NormalizedProgress",
     "OutboxAction",
     "OfficialBookDTO",
+    "OfficialAppBookSummaryDTO",
     "OfficialBookFileDTO",
     "OfficialBulkShelfAssignRequest",
     "OfficialLoginRequest",

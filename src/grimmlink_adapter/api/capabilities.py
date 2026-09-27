@@ -6,7 +6,7 @@ from grimmlink_adapter.models.grimmlink import GrimmlinkCapabilitiesResponse
 
 router = APIRouter(tags=["Capabilities"])
 
-# Session 00 exposes route shapes, but no sync or shelf data paths are operational.
+# Capabilities enabled as read paths become operational; mutation flags stay disabled.
 _STATIC_CAPABILITIES = GrimmlinkCapabilitiesResponse(
     apiVersion="v1",
     webUiProgress=False,
@@ -14,7 +14,7 @@ _STATIC_CAPABILITIES = GrimmlinkCapabilitiesResponse(
     pdfBridge=False,
     readingSessions=False,
     metadataSync=False,
-    shelves=False,
+    shelves=True,
 )
 
 

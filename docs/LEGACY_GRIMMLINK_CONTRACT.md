@@ -817,11 +817,11 @@ Idempotency is evaluated on `(userId, bookId, bookHash, startTime, endTime, devi
 | Auth | `GET` | `/auth` | MD5 | Immediate 401 on bad credentials | **ACTIVE** |
 | Capabilities | `GET` | `/capabilities` | None | Lists feature flags; mutations false in scaffold | **ACTIVE** |
 | Book by Hash | `GET` | `/books/by-hash/{hash}` | MD5/Bearer | Access check before lookup | **501** (S03) |
-| Download | `GET` | `/books/{id}/download` | MD5/Bearer | Streaming response, safe rename | **501** (S03) |
+| Download | `GET` | `/books/{id}/download` | MD5/Bearer | Bearer-authenticated stream, verified book and response type | **Implemented** (S04) |
 | Read Statuses | `GET` | `/books/read-statuses` | MD5/Bearer | Returns 6 standard statuses | **501** (S03) |
 | Read Status Update | `PUT` | `/books/{id}/status` | MD5/Bearer | Status normalization | **501** (S03) |
-| Shelves List | `GET` | `/shelves` | MD5/Bearer | Regular + Magic unified | **501** (S04) |
-| Shelf Books | `GET` | `/shelves/{type}/{id}/books` | MD5/Bearer | Pagination & BookSummary | **501** (S04) |
+| Shelves List | `GET` | `/shelves` | MD5/Bearer | Regular + Magic unified | **Implemented** (S04) |
+| Shelf Books | `GET` | `/shelves/{type}/{id}/books` | MD5/Bearer | Complete snapshot; magic pagination; BookSummary | **Implemented** (S04) |
 | Shelf Removal | `POST` | `/shelves/{type}/{id}/books/{b}/remove` | MD5/Bearer | Magic shelf removal rejected; multi-shelf protected | **501 Regular / 400 Magic** |
 | Progress Get | `GET` | `/syncs/progress/{hash}` | MD5/Bearer | Unit scale 0-100% | **501** (S06) |
 | Progress Put | `PUT` | `/syncs/progress` | MD5/Bearer | Native location required for EPUB | **501** (S06) |

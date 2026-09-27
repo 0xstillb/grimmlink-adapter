@@ -21,7 +21,7 @@ async def list_shelves(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> list[GrimmlinkShelfSummary]:
     """List regular and magic shelves."""
-    return await _shelf_service.list_shelves(type)
+    return await _shelf_service.list_shelves(type, creds)
 
 
 @router.get("/{shelf_id}/books", response_model=list[GrimmlinkBookSummary])
@@ -33,7 +33,7 @@ async def list_regular_shelf_books(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> list[GrimmlinkBookSummary]:
     """List books in a regular shelf."""
-    return await _shelf_service.list_shelf_books("regular", shelf_id, limit, offset, cursor)
+    return await _shelf_service.list_shelf_books("regular", shelf_id, creds, limit, offset, cursor)
 
 
 @router.get("/{shelf_type}/{shelf_id}/books", response_model=list[GrimmlinkBookSummary])
@@ -46,7 +46,7 @@ async def list_shelf_books_by_type(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> list[GrimmlinkBookSummary]:
     """List books in a shelf by type (regular or magic)."""
-    return await _shelf_service.list_shelf_books(shelf_type, shelf_id, limit, offset, cursor)
+    return await _shelf_service.list_shelf_books(shelf_type, shelf_id, creds, limit, offset, cursor)
 
 
 @router.post("/{shelf_id}/books/{book_id}/remove", response_model=GrimmlinkShelfRemovalResponse)

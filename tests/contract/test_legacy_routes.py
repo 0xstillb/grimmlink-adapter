@@ -7,6 +7,7 @@ import pytest
 from httpx import AsyncClient
 
 from grimmlink_adapter.models.internal import BookHashEntry
+from grimmlink_adapter.official.exceptions import OfficialAuthError
 from grimmlink_adapter.state.cache import BookHashCache
 
 AUTH_HEADERS = {
@@ -78,19 +79,22 @@ async def test_capabilities_endpoint_contract(test_client: AsyncClient) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["apiVersion"] == "v1"
-    # In Session 00 (scaffold), mutations are NOT active yet
+    # Read paths are enabled; unimplemented mutation and sync paths remain disabled.
     assert data["progressSync"] is False
     assert data["readingSessions"] is False
     assert data["metadataSync"] is False
     assert data["pdfBridge"] is False
-    assert data["shelves"] is False
+    assert data["shelves"] is True
 
 
 @pytest.mark.asyncio
-async def test_shelves_list_unavailable_in_scaffold(test_client: AsyncClient) -> None:
-    resp = await test_client.get("/api/grimmlink/v1/shelves", headers=AUTH_HEADERS)
-    assert resp.status_code == 501
-    assert "shelf listing is unavailable" in resp.json()["detail"].lower()
+async def test_shelves_list_requires_working_upstream(test_client: AsyncClient) -> None:
+    with patch(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.get_koreader_auth",
+        side_effect=OfficialAuthError("Invalid credentials", status_code=401),
+    ):
+        resp = await test_client.get("/api/grimmlink/v1/shelves", headers=AUTH_HEADERS)
+    assert resp.status_code in (401, 502)
 
 
 @pytest.mark.asyncio
@@ -187,11 +191,8 @@ async def test_reading_sessions_batch_returns_501_in_scaffold(test_client: Async
 @pytest.mark.parametrize(
     "path",
     [
-        "/api/grimmlink/v1/shelves/regular/1/books",
-        "/api/grimmlink/v1/shelves/magic/100/books",
         "/api/grimmlink/v1/syncs/metadata",
         "/api/grimmlink/v1/reading-sessions?bookId=42",
-        "/api/grimmlink/v1/books/42/download",
         "/api/grimmlink/v1/books/read-statuses",
     ],
 )
