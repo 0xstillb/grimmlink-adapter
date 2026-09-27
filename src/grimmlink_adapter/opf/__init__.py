@@ -7,10 +7,11 @@ from grimmlink_adapter.opf.parser import (
     UnsafePathError,
     discover_opf,
     file_fingerprint,
+    grimmory_file_fingerprint,
     parse_opf,
 )
 
 __all__ = [
     "AmbiguousOPFError", "MalformedOPFError", "OPFError", "UnsafePathError",
-    "discover_opf", "file_fingerprint", "parse_opf",
+    "discover_opf", "file_fingerprint", "grimmory_file_fingerprint", "parse_opf",
 ]

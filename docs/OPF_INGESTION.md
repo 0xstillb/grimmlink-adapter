@@ -2,44 +2,56 @@
 
 ## Scope
 
-This flow imports metadata from an OPF sidecar while leaving the source
-ebook/PDF/CBX bytes unchanged. It requires a verified exact Grimmory `book_id`;
-it does not fuzzy-match by title, filename, author, or ISBN.
+Import metadata from a deterministic OPF while protecting the ebook/PDF/CBX,
+OPF, and cover source files. A caller-supplied `book_id` is only a hint: the
+service proves an exact Grimmory partial-MD5 mapping through the configured
+read-only DB lookup, then verifies the returned `bookId`, `bookFileId`, and
+filename through Official's book-detail API. Missing and ambiguous matches
+stop without writes.
 
 ## Modes
 
-- `api_preferred`: update Official Grimmory first; use sidecars only for
-  transport, timeout, or upstream 5xx failure.
-- `api_only`: update Official Grimmory and fail closed on any API error.
-- `sidecar_only`: write local sidecars without calling Official Grimmory.
-- `dry_run=true`: parse, normalize, and preview the operation without API,
-  file, or SQLite writes.
+- `api_preferred`: call Official's metadata API only after a positive settings
+  check confirms source-file persistence and file-moving are disabled. Use the
+  sidecar fallback only when `METADATA_FALLBACK=sidecar` and the failure is an
+  eligible transport/timeout/5xx or explicit unsupported-field 422.
+- `api_only`: require the same safe settings check and fail on any metadata API
+  error. Stock Official cover upload is disabled because it can rewrite the
+  source ebook/PDF/CBX.
+- `sidecar_only`: write Adapter-owned JSON/JPEG sidecars locally. Ask Official
+  to import metadata only when its source-write settings are positively known
+  safe; otherwise report `partial` with import pending.
+- `dry_run=true`: parse, resolve and preview without API writes, sidecar writes,
+  or SQLite state writes. Identity and settings reads may still occur.
 
-The Official metadata request uses Grimmory's `MetadataUpdateWrapper`: the
-normalized fields are sent under `metadata` with the verified `bookId`; series
-is flattened to `seriesName`, `seriesNumber`, and `seriesTotal`. The request
-uses `mergeCategories=false` and `replaceMode=REPLACE_WHEN_PROVIDED`.
+Metadata requests use Grimmory's `MetadataUpdateWrapper`, with fields nested
+under `metadata`, the verified `bookId`, flattened series fields,
+`mergeCategories=false`, and `replaceMode=REPLACE_WHEN_PROVIDED`. Locked fields
+stop before any write, including the global all-metadata lock.
 
-## Discovery and normalization
+## Covers and sidecars
 
-Discovery accepts an explicit `.opf`, an adjacent `<book-stem>.opf`,
-`metadata.opf`, or one OPF in a supplied directory. Multiple candidates and
-paths escaping the source root stop with an error. Canonical fields include
-title, subtitle, authors, publisher, publication date, description, language,
-categories, ISBN-10/ISBN-13, series, and an optional cover.
+Official's sidecar import applies metadata; cover application is a separate
+operation. Covers are therefore written only as adjacent `<stem>.cover.jpg`
+files and reported as pending. A cover keeps the result partial and retryable;
+the Adapter never reports the cover as applied. Cover source must be JPEG.
+Sidecars are written atomically and existing files are replaced only when the
+metadata sidecar identifies the Adapter as owner and references that cover.
 
-## Fallback and safety rules
+The book, OPF, and cover fingerprints are checked before and after ingestion.
+The service does not call Official's cover upload endpoint. Official metadata
+or sidecar-import writes are blocked whenever persistence settings are enabled,
+missing, malformed, or unavailable.
 
-Official 401/403, malformed identity, malformed OPF, field locks, and 4xx
-rejections never fall back, except HTTP 422 which Grimmory uses for a deployed
-field incompatibility. Sidecars use an object cover shape and are written next
-to the book as `<stem>.metadata.json` and `<stem>.cover.jpg`. The source book
-fingerprint is checked before and after the operation. SQLite state makes the
-same source fingerprint, metadata hash, and book identity idempotent.
+## Deduplication and review
 
-## Review gate
+SQLite deduplication includes OPF fingerprint, cover fingerprint, normalized
+metadata, book identity, and delivery mode. Only complete results are
+deduplicated; partial and pending results remain retryable. HTTP 422 is
+fallbackable only when its response explicitly identifies an unsupported,
+unknown, or unrecognized field. Auth, permission, lock, identity, and other
+client errors stop without fallback.
 
-Local tests verify parsing, discovery, ambiguity, traversal protection, dry-run,
-deduplication, lock handling, API success, and permitted fallback. A Sol review
-must still validate the pinned Grimmory request/response contract and Pi canary
-before this session is merged.
+No Pi end-to-end evidence is included. Before merge, review the pinned Grimmory
+payload/settings/lock contracts and run an authorized Pi canary. Tests and
+static checks have not been run for this review repair.

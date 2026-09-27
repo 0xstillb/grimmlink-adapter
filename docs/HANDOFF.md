@@ -138,20 +138,25 @@ matches its bytes. Runtime deployment and review remain open.
 
 ## 6. Session 03A — OPF API with Sidecar Fallback
 
-The adapter now contains a local OPF ingestion service. It discovers and parses
-one deterministic OPF, normalizes canonical metadata, requires a verified exact
-`book_id`, and preserves the source ebook/PDF/CBX bytes. `api_preferred` calls
-Official metadata and cover endpoints first; transport, timeout, 5xx, or the
-documented 422 field-incompatibility response fall back to JSON/JPEG sidecars.
-Authentication failures, permission failures, malformed OPF, ambiguous
-discovery, identity failures, and locked fields stop without fallback.
-`api_only`, `api_preferred`, and `sidecar_only` are supported, with dry-run and
-SQLite deduplication state.
+The review repair now resolves the target from an exact partial-MD5 lookup in
+the configured read-only Grimmory DB, then verifies the book and file IDs with
+Official's API. A supplied `book_id` cannot override that identity. Global and
+per-field locks stop before writes. Official API metadata writes are allowed
+only after settings confirm source-file persistence and file-moving are off;
+missing or unreadable settings block API writes.
 
-The implementation is covered by the local 03A parser/service tests and the
-full suite. Before merge, Sol must verify the exact pinned Grimmory metadata
-payload, lock semantics, cover multipart contract, API error mapping, and the
-runtime evidence on Pi. No Official Grimmory database write is part of this
-session.
+The stock Official cover-upload endpoint is disabled in this flow because its
+implementation can rewrite the source ebook/PDF/CBX. Covers are emitted only
+as local JPEG sidecars, and Official sidecar import is not claimed to apply a
+cover. Partial results remain retryable. Sidecar overwrites require Adapter
+ownership markers and use atomic replacement. Fallback is controlled by
+`METADATA_FALLBACK`; HTTP 422 falls back only for explicit unsupported-field
+messages. The book, OPF, and cover source fingerprints are checked after work.
+
+`api_only`, `api_preferred`, and `sidecar_only` remain supported, with dry-run
+and SQLite deduplication state. No tests, static checks, or Pi canary were run
+for this repair. The prior 03A test evidence does not verify these latest
+changes. Sol review and authorized runtime validation remain required before
+merge. Grimmory DB writes are not part of this session.
 
 ---

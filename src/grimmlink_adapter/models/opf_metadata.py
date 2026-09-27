@@ -97,3 +97,4 @@ class IngestionResult(BaseModel):
     sidecar_metadata_path: Path | None = None
     sidecar_cover_path: Path | None = None
     preview: IngestionPreview | None = None
+    cover_status: str | None = None

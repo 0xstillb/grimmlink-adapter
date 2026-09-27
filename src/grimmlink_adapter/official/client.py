@@ -17,7 +17,6 @@ Invariants:
 import asyncio
 import json
 import logging
-import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -38,9 +37,10 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_AUTH_LOGIN,
     OFFICIAL_AUTH_REFRESH,
     OFFICIAL_BOOK_BY_ID,
-    OFFICIAL_BOOK_COVER_UPLOAD,
     OFFICIAL_BOOK_DOWNLOAD,
     OFFICIAL_BOOK_METADATA,
+    OFFICIAL_BOOK_SIDECAR_IMPORT,
+    OFFICIAL_APP_SETTINGS,
     OFFICIAL_HEALTHCHECK,
     OFFICIAL_KOREADER_AUTH,
     OFFICIAL_KOREADER_PROGRESS_HASH,
@@ -865,33 +865,33 @@ class OfficialGrimmoryClient:
             )
         return self._parse_json(resp, "PUT", url) if resp.content else {}
 
-    async def upload_book_cover(
-        self, book_id: int, bearer_token: str, cover_path: str,
-    ) -> dict[str, Any]:
-        """Upload a cover without touching the source ebook/PDF."""
-        url = OFFICIAL_BOOK_COVER_UPLOAD.format(bookId=book_id)
+    async def get_app_settings(self, bearer_token: str) -> dict[str, Any]:
+        """Read Official persistence settings before any metadata write."""
+        url = OFFICIAL_APP_SETTINGS
         headers = {"Authorization": f"Bearer {bearer_token}"}
-        try:
-            with open(cover_path, "rb") as cover:
-                filename = Path(cover_path).name
-                content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-                resp = await self._send_request(
-                    method="POST", path=url, auth_mode=AuthMode.NONE, headers=headers,
-                    files={"file": (filename, cover, content_type)},
-                )
-        except OSError as exc:
-            raise OfficialTransportError("Unable to read cover source") from exc
-        if resp.status_code in (401, 403):
-            raise OfficialAuthError(
-                "Unauthorized cover upload", status_code=resp.status_code,
-                method="POST", url=url, response_body=resp.text,
+        result = await self.request_json(
+            "GET", url, auth_mode=AuthMode.NONE, headers=headers,
+        )
+        if not isinstance(result, dict):
+            raise OfficialBadResponseError(
+                "Application settings response is not an object",
+                method="GET", url=url,
             )
+        return result
+
+    async def import_book_sidecar(self, book_id: int, bearer_token: str) -> None:
+        """Ask Official to import the adjacent sidecar for this exact book."""
+        url = OFFICIAL_BOOK_SIDECAR_IMPORT.format(bookId=book_id)
+        resp = await self._send_request(
+            method="POST", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
         if resp.status_code >= 400:
             raise OfficialBadResponseError(
-                f"Cover upload returned HTTP {resp.status_code}",
-                status_code=resp.status_code, method="POST", url=url, response_body=resp.text,
+                f"Sidecar import returned HTTP {resp.status_code}",
+                status_code=resp.status_code, method="POST", url=url,
+                response_body=resp.text,
             )
-        return self._parse_json(resp, "POST", url) if resp.content else {}
 
     async def get_regular_shelves(self, bearer_token: str) -> list[dict[str, Any]]:
         """Fetch list of regular shelves."""

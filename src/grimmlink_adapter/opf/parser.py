@@ -131,6 +131,22 @@ def file_fingerprint(path: Path) -> str:
     return digest.hexdigest()
 
 
+def grimmory_file_fingerprint(path: Path) -> str:
+    """Match Grimmory FileFingerprint.generateHash partial-MD5 semantics."""
+    digest = hashlib.md5()
+    size = path.stat().st_size
+    offset = 256
+    with path.open("rb") as handle:
+        while offset < size:
+            handle.seek(offset)
+            sample = handle.read(1024)
+            if not sample:
+                break
+            digest.update(sample)
+            offset *= 4
+    return digest.hexdigest()
+
+
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1].lower()
 

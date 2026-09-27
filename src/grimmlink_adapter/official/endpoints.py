@@ -21,7 +21,8 @@ OFFICIAL_BOOKS_APP_SEARCH = "/api/v1/app/books/search"
 OFFICIAL_BOOK_BY_ID = "/api/v1/books/{bookId}"
 OFFICIAL_BOOK_DOWNLOAD = "/api/v1/books/{bookId}/download"
 OFFICIAL_BOOK_METADATA = "/api/v1/books/{bookId}/metadata"
-OFFICIAL_BOOK_COVER_UPLOAD = "/api/v1/books/{bookId}/metadata/cover/upload"
+OFFICIAL_BOOK_SIDECAR_IMPORT = "/api/v1/books/{bookId}/sidecar/import"
+OFFICIAL_APP_SETTINGS = "/api/v1/settings"
 
 # Shelves
 OFFICIAL_SHELVES = "/api/v1/shelves"
