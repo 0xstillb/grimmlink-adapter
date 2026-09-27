@@ -2,7 +2,7 @@
 
 - **Current Session:** Session 03A — OPF API with Sidecar Fallback
 - **Implementer:** Codex implementation; Sol deep review pending
-- **Current Lifecycle State:** Session 03A Pi positive canary passed; implementation review remains before merge
+- **Current Lifecycle State:** Session 03A positive canary passed and merged to main
 - **Timestamp:** 2026-09-27
 
 ---
@@ -170,8 +170,9 @@ No direct Grimmory DB write, production Adapter SQLite write, sidecar import,
 cover upload, or rescan occurred. A rollback attempt was rejected because the
 harness serialized `clearFlags` as an array; no retry was made. The verified
 description is the intended OPF value. The production container remains on
-`grimmlink-adapter:355a197-md5fix`; the canary image was not deployed. The
-Session 03A runtime canary is closed; implementation review remains before
-merge. Grimmory DB writes are not part of this session.
+`grimmlink-adapter:355a197-md5fix`; the canary image was not deployed. Session
+03A was merged to `main` at `438fa5a98ad949c836934c11b651aaf61bc58c50` after
+the canary and pre-merge checks passed. Grimmory DB writes are not part of
+this session.
 
 ---

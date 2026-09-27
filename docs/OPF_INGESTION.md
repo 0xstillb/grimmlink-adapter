@@ -78,5 +78,5 @@ Status: **PASS**. The canary ran from commit
 - The production container remains on `grimmlink-adapter:355a197-md5fix`;
   the canary image was not deployed.
 
-This closes the Session 03A runtime canary. The implementation review gate
-still applies before merge.
+This closes the Session 03A runtime canary. The implementation was merged to
+`main` at `438fa5a98ad949c836934c11b651aaf61bc58c50` after review and checks.

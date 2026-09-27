@@ -326,4 +326,5 @@ hid the saved description. A rollback attempt was rejected because the harness
 sent `clearFlags` as an array; it was not retried. The verified current value
 is the intended OPF description. The production container remains on
 `grimmlink-adapter:355a197-md5fix`; the canary image was not deployed. Runtime
-canary is closed; implementation review remains before merge.
+canary is closed. Session 03A was merged to `main` at
+`438fa5a98ad949c836934c11b651aaf61bc58c50` after review and checks.
