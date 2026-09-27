@@ -29,7 +29,7 @@ async def test_local_link_checks_both_auth_modes_before_saving() -> None:
         await conn.commit()
     with (
         patch.object(OfficialGrimmoryClient, "get_koreader_auth", new_callable=AsyncMock,
-                     return_value={"userId": 17}) as koreader,
+                     return_value={"username": "reader"}) as koreader,
         patch.object(OfficialGrimmoryClient, "login", new_callable=AsyncMock,
                      return_value=OfficialLoginResponse(
                          token="access", refreshToken="refresh", userId=17, username="reader",
@@ -51,7 +51,7 @@ async def test_local_link_checks_both_auth_modes_before_saving() -> None:
 async def test_local_link_rejects_different_upstream_user() -> None:
     with (
         patch.object(OfficialGrimmoryClient, "get_koreader_auth", new_callable=AsyncMock,
-                     return_value={"userId": 18}),
+                     return_value={"username": "other-reader"}),
         patch.object(OfficialGrimmoryClient, "login", new_callable=AsyncMock,
                      return_value=OfficialLoginResponse(token="access", userId=17)),
         patch.object(OfficialGrimmoryClient, "get_current_user", new_callable=AsyncMock,

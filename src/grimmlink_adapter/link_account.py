@@ -25,12 +25,15 @@ async def link(username: str, password: str, server: str) -> str:
         koreader = await client.get_koreader_auth(username, md5_key)
         login = await client.login(username, password)
         profile = await client.get_current_user(login.token)
-    koreader_id = koreader.get("userId") or koreader.get("id")
+    # Stock Grimmory's KOReader auth response only contains the authenticated
+    # username; it does not expose a userId/id field. Bind that username to the
+    # JWT profile instead of inventing an ID comparison.
+    koreader_username = koreader.get("username")
     profile_id = profile.get("id") or profile.get("userId")
     if (
-        isinstance(koreader_id, bool) or not isinstance(koreader_id, int)
+        koreader_username != username
         or isinstance(profile_id, bool) or not isinstance(profile_id, int)
-        or koreader_id <= 0 or koreader_id != profile_id
+        or profile_id <= 0
         or profile.get("username") != username
     ):
         raise ValueError("Official KOReader and JWT identities do not match")
