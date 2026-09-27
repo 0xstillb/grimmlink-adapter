@@ -868,9 +868,18 @@ class OfficialGrimmoryClient:
         """Read Official persistence settings before any metadata write."""
         url = OFFICIAL_APP_SETTINGS
         headers = {"Authorization": f"Bearer {bearer_token}"}
-        result = await self.request_json(
-            "GET", url, auth_mode=AuthMode.NONE, headers=headers,
+        # This is an explicit caller token, like get_book_by_id; do not route it
+        # through JWTAuth or refresh a different account stored on this client.
+        resp = await self._send_request(
+            method="GET", path=url, auth_mode=AuthMode.NONE, headers=headers,
         )
+        if resp.status_code >= 400:
+            raise OfficialBadResponseError(
+                f"Application settings returned HTTP {resp.status_code}",
+                status_code=resp.status_code, method="GET", url=url,
+                response_body=resp.text,
+            )
+        result = self._parse_json(resp, "GET", url)
         if not isinstance(result, dict):
             raise OfficialBadResponseError(
                 "Application settings response is not an object",

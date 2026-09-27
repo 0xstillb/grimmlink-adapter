@@ -682,6 +682,26 @@ async def test_read_only_health_canary() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_app_settings_accepts_explicit_bearer_without_jwt_auth() -> None:
+    observed: dict[str, str | None] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["authorization"] = request.headers.get("authorization")
+        assert request.method == "GET"
+        assert request.url.path == "/api/v1/settings"
+        return httpx.Response(200, json={"metadataPersistenceSettings": {}})
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    result = await client.get_app_settings("explicit-token")
+
+    assert result == {"metadataPersistenceSettings": {}}
+    assert observed["authorization"] == "Bearer explicit-token"
+    assert client.jwt_auth is None
+
+
+@pytest.mark.asyncio
 async def test_read_only_jwt_auth_canary() -> None:
     valid_jwt = make_jwt(time.time() + 3600)
 
