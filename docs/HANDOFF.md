@@ -1,113 +1,139 @@
 # Inter-Session Handoff & Governance
 
-- **Current Session:** `Session 02 — Official Auth + HTTP Client`
-- **Implementer:** Antigravity (Gemini)
-- **Reviewer:** Codex (Session 02 review and repair)
-- **Current Lifecycle State:** `Session 02 repaired and verified — STOP before merge`
+- **Current Session:** Session 03 — Book Identity
+- **Implementer:** Antigravity (Gemini 3.8 Flash); Codex review repair
+- **Current Lifecycle State:** Session 03 review fixes locally verified; Pi deployment canary remains
 - **Timestamp:** 2026-09-26
 
 ---
 
-## 1. Summary of Session 02 Deliverables
+## 1. Review Repair
 
-In accordance with `sessions/02_AUTH_AND_OFFICIAL_CLIENT.md` and user directives:
-- **Official Grimmory Transport Only:** Implemented stock Official Grimmory HTTP transport with zero direct DB access.
-- **Strictly Separated Auth Modes:** Dedicated routing and credential handling separating general `/api/v1/**` JWT Bearer from `/api/koreader/**` MD5 authentication.
-- **No Shelf/Progress/Metadata Behavior Yet:** Preserved scaffold stubs; no business logic or mutations for shelves, progress, or metadata were introduced.
-- **Security Non-Negotiables:** Secrets masking, TLS verification default with explicit opt-in, exponential backoff retry, header redaction, and infinite refresh loop prevention.
+The adapter now fails closed when Official Grimmory cannot prove a hash-to-book
+identity. Stock Official GET /api/koreader/syncs/progress/{bookHash} returns
+reading position fields but no bookId. An empty progress response cannot prove
+that a book is absent. A Bearer-only request cannot query this KOReader MD5 route.
 
-### Deliverable A: Auth Models & Strict Separation (`src/grimmlink_adapter/official/auth.py`)
-- `AuthMode`: Enumeration (`JWT`, `KOREADER`, `NONE`).
-- `JWTAuth`: Pydantic model managing `username`, `password`, `access_token`, `refresh_token`, and `expires_at`.
-  - `parse_jwt_expiry`: Extracts standard `exp` claim from unverified JWT base64url payload for proactive expiry detection.
-  - `is_expired(buffer_seconds=30.0)`: Checks token expiration with safety buffer.
-  - Masked `__repr__` and `__str__` redacting password, access_token, and refresh_token.
-- `KOReaderAuth`: Pydantic model managing `username` and `md5_key` with header generator `get_headers()` (`x-auth-user`, `x-auth-key`) and masked `__repr__`.
-- `determine_auth_mode_for_path`: Automatically classifies paths (`/api/koreader/**` -> `KOREADER`, `/api/v1/**` -> `JWT`, others -> `NONE`).
-- `validate_auth_separation`: Rejects cross-domain auth mixing (e.g. JWT with KOReader endpoint or KOReader MD5 with general API) with `ValueError`.
+- Existing server/user/currentHash or initialHash mappings can be used with
+  a same-user Bearer token after an upstream book and file access check.
+- MD5-only requests use a same-user Official JWT after local account linking.
+  Without a valid link they fail closed with 501. An unmapped Bearer hash
+  returns 501 when no authoritative DB/API
+  mapping exists; the adapter does not invent bookId or return a false 404.
+- Upstream auth and transport failures remain distinct from unavailable hash
+  evidence: 401/403 and 502 respectively.
+- If an upstream extension supplies a positive bookId in the hash response,
+  the adapter verifies the book with the caller's Bearer token before caching
+  it. This conditional path is not claimed as stock Official functionality.
+- When both MD5 and Bearer credentials arrive, each is authenticated and the
+  upstream user IDs must match.
+- The final book detail fetch is required. A revoked permission or malformed
+  response cannot fall back to cached details. A changed book/file ID on the
+second fetch returns 409. A file may be the primary or an alternative format.
 
-### Deliverable B: Typed Exception Hierarchy (`src/grimmlink_adapter/official/exceptions.py`)
-- `OfficialClientError`: Base exception scrubbing `message`, `url`, and `response_body` using `mask_secret`. Never reveals raw credentials or tokens.
-- `OfficialAuthError`: Raised on 401 Unauthorized, invalid login, token refresh failure, or persistent 401 after retry.
-- `OfficialPermissionError`: Raised on 403 Forbidden.
-- `OfficialTimeoutError`: Raised when connect, read, or pool timeouts occur and retries are exhausted.
-- `OfficialTransportError`: Raised on network failures, DNS resolution errors, connection refused, or TLS handshake failures.
-- `OfficialBadResponseError`: Raised on malformed JSON responses, unexpected non-dict payloads, or unhandled 5xx server errors.
+The frozen OfficialBookDTO response model remains declared for successful
+responses. Missing mapping evidence or a required account link returns 501.
 
-### Deliverable C: Official Grimmory Client Transport (`src/grimmlink_adapter/official/client.py`)
-- **Strict Authentication Separation:**
-  - Requests to `/api/v1/**` automatically inject `Authorization: Bearer <token>` and strip any `x-auth-user` / `x-auth-key`.
-  - Requests to `/api/koreader/**` automatically inject `x-auth-user` + `x-auth-key` and strip any `Authorization` header.
-- **Token Management & 401 Safe Refresh:**
-  - `login()`: POST `/api/v1/auth/login` updates JWT tokens and extracts expiry.
-  - `refresh_token()`: POST `/api/v1/auth/refresh` exchanges refresh token for new access token.
-  - `_ensure_valid_jwt()`: Proactively refreshes expired tokens before dispatching requests.
-  - **One Safe Refresh on 401:** When a protected `/api/v1/**` request receives 401, acquires `_refresh_lock`, executes `refresh_token()` (or `login()` fallback), and retries the request exactly once with `_is_401_retry=True`.
-  - **Loop Prevention:** If retried request receives 401 again, immediately raises `OfficialAuthError`. Never enters infinite retry loops.
-  - **KOReader 401 Invariant:** A 401 on `/api/koreader/**` immediately raises `OfficialAuthError` and never triggers JWT refresh.
-- **TLS Verification & Self-Signed Opt-In:**
-  - `ssl_verify = True` by default (`OFFICIAL_CLIENT_VERIFY_SSL`).
-  - Supports custom CA bundle path (`OFFICIAL_CLIENT_CA_BUNDLE`).
-  - Explicit self-signed opt-out (`verify_ssl=False`) logs a prominent warning.
-- **Timeout & Retry with Exponential Backoff:**
-  - Configurable timeouts (`OFFICIAL_CLIENT_TIMEOUT`, `OFFICIAL_CLIENT_CONNECT_TIMEOUT`).
-  - Retries transient errors (`httpx.ConnectError`, `httpx.TimeoutException`, HTTP 502, 503, 504) for GET, HEAD, and OPTIONS with exponential backoff: `delay = backoff_factor * (2 ** (attempt - 1))`. Mutation methods are sent once.
-  - Non-transient errors (400, 403, 422) fail immediately on attempt 1 without retry.
-- **Read-Only Health Canaries:**
-  - `check_health()`: GET `/api/v1/healthcheck` (verifies server UP).
-  - `canary_jwt_auth()`: GET `/api/v1/users/me` with Bearer token (verifies JWT session).
-  - `canary_koreader_auth()`: GET `/api/koreader/users/auth` with MD5 headers (verifies KOReader credentials).
-  - All canaries strictly read-only GET requests with zero mutations.
-- **Backward Compatibility:**
-  - Helper methods (`get_koreader_auth`, `login_jwt`, `get_current_user`, `get_koreader_progress`, `get_book_by_id`, `get_regular_shelves`, `get_magic_shelves`, `download_book_stream`) preserved for existing services and contract tests.
+## 2. Remaining Functional Blocker
 
-### Deliverable D: Security Enhancements (`src/grimmlink_adapter/security/masking.py`)
-- Added `redact_headers(headers)` masking `Authorization`, `x-auth-key`, `cookie`, `set-cookie`, `proxy-authorization`, and headers containing token/secret/password.
-- Expanded `SENSITIVE_PATTERNS` to cover camelCase tokens (`refreshToken`, `accessToken`) and MD5 keys across JSON and key-value formats.
+The Pi read-only audit closed the sample hash diagnosis without KOReader:
+`d65441b897513421215d1fe4cfc3e9a5` maps to one non-deleted Grimmory row
+(`bookId=25`, `bookFileId=25`, `libraryId=4`). Stored `current_hash` and
+`initial_hash` are `d654…`; current file bytes fingerprint as
+`95b818e712f70c1eb0b6f2aaaa650e1e`. No library refresh was run.
+
+The audit confirms Grimmory uses MariaDB 11.4.8. The DB is reachable as
+`grimmory-mariadb:3306` only from Docker network `grimmory_default`; port 3306
+is not published on the host. The existing application account has broad
+write privileges. No read-only account or views were found, and the Adapter
+is not deployed on the Pi. The audit inspected user/library permission tables;
+the implemented provider only needs SELECT on `book`, `book_file`, `library`,
+and `library_path`, since effective access is checked by Official's Bearer API.
+`current_hash` is indexed; `initial_hash` is not. No Official Bearer token was
+available for the `GET /api/v1/books/25` access check.
+
+The user approved a narrow read-only DB lookup exception on 2026-09-26. The
+Adapter now has an opt-in MariaDB provider. It runs parameterized exact
+`current_hash` lookup first, checks `initial_hash` only on a current miss,
+filters deleted/non-book rows, and fails on ambiguity. The provider contains
+no DB write statements and is disabled by default. Candidate rows are verified
+with a same-user Official Bearer book-detail request before being cached in
+the Adapter SQLite store or returned. Configured DB lookup takes precedence
+over older Adapter cache rows; DB errors fail closed with 502. MD5-only clients
+can link their own account locally via
+`python -m grimmlink_adapter.link_account <username>`. The link command verifies
+KOReader MD5 auth and JWT profile refer to the same user, then saves tokens in
+Adapter SQLite. The DB file must be restricted to the Adapter operator.
+
+Runtime use is not configured yet. The audit found no dedicated SELECT-only
+account, no host-published MariaDB port, no Adapter deployment on the Pi, and
+no linked user for the Official access canary. Do not enable the provider or
+reuse the broad Grimmory application account. Provision an account with SELECT
+only on `book`, `book_file`, `library`, and `library_path`, restrict its network
+source to the Adapter, connect the Adapter to `grimmory_default`, and keep DB
+settings in the secret mechanism. Link the target user locally and test book 25
+with an MD5-only request. Do not run a library refresh; it affects all of
+library 4, not only book 25.
+
+Sources:
+- [Official KOReader progress response](https://grimmory.org/api/operations/getprogress/)
+- [Official file metadata response](https://grimmory.org/api/operations/getfilemetadata/)
+- references/OFFICIAL_GRIMMORY_API_PARITY_AUDIT.md, section B3
+
+## 3. Verification Evidence
+
+- uv run --no-sync pytest -q → **168 passed** (including linked MD5 and DB/cache precedence tests).
+- uv run --no-sync ruff check . → **All checks passed**.
+- uv run --no-sync mypy src → **No issues in 42 source files**.
+- git diff --check → no whitespace errors (line-ending notice only).
+
+New regressions cover the stock progress DTO without bookId, Bearer-only
+cache miss, upstream transport failure, final-detail 403, file replacement during the final fetch, and mismatched
+MD5/Bearer user IDs.
+
+## 4. Session 03 Files
+
+- src/grimmlink_adapter/services/book_service.py — safe resolution and
+  distinct unavailable/transport errors.
+- src/grimmlink_adapter/api/books.py — verified user binding, status mapping,
+  and required final book detail.
+- src/grimmlink_adapter/official/identity_lookup.py — parameterized,
+  read-only MariaDB hash lookup, disabled unless configured.
+- src/grimmlink_adapter/config.py and `.env.example` — optional DB connection
+  settings; credentials are intended for the secret mechanism.
+- src/grimmlink_adapter/state/book_identity.py and
+  migrations/002_book_identity.sql — scoped mapping and ambiguity handling.
+- tests/unit/test_book_identity.py — acceptance and review regressions.
+- Contract tests preserve the frozen OfficialBookDTO route model.
+
+## 5. Next Gate
+
+To close Session 03 on the Pi:
+
+1. Provision a dedicated MariaDB account with SELECT only on `book`,
+   `book_file`, `library`, and `library_path`. Verify its grants and connect
+   the Adapter container to the existing restricted `grimmory_default` network.
+   Deploy the Adapter with `GRIMMORY_DB_ENABLED=true`, its own persistent SQLite
+   volume, and the new migrations. Do not deploy the example Compose file as-is;
+   it defines a second Grimmory service.
+2. Run `python -m grimmlink_adapter.link_account <username>` inside the Adapter
+   container as the target Grimmory user. It must share the running Adapter's
+   `GRIMMORY_BASE_URL` and `SQLITE_DB_PATH`. Do not expose the password or MD5
+   key in a shell command or log.
+3. Select an active book whose current on-disk partial MD5 equals its
+   `book_file.current_hash`. Send a read-only MD5-only GET to
+   `/api/grimmlink/v1/books/by-hash/{hash}` without a caller Bearer token.
+   Require HTTP 200 and the exact expected `bookId` and `bookFileId` in
+   `primaryFile` or `alternativeFormats`. Repeat with an unknown hash (404),
+   an invalid MD5 key (401), and a user without book access (403). Record
+   redacted request/response evidence and confirm no unexpected DB writes.
+4. Review the runtime evidence and diff, then commit/merge through the
+   required Session 03 review gate.
+
+Do not use the known stale `d654…` sample alone as a pass criterion: book 25's
+current bytes hash to `95b8…`. A 200 for `d654…` would prove DB mapping and
+permission checks but would not prove current file-byte identity. No library
+refresh is required for this canary; choose a file whose DB hash already
+matches its bytes. Runtime deployment and review remain open.
 
 ---
-
-## 2. Verification Evidence
-
-After review repairs on 2026-09-26:
-
-- `uv run --no-sync pytest -q` → **121 passed**.
-- `uv run --no-sync ruff check .` → **All checks passed**.
-- `uv run --no-sync mypy src` → **No issues in 37 source files**.
-- `git diff --check` → **No whitespace errors** (Git reports line-ending notices only).
-
-The regression tests in `tests/unit/test_session02_review_regressions.py` cover case-insensitive auth headers, account switching, no retry for POST, malformed auth identities, 403 mapping, safe streaming errors, and isolation of caller-supplied bearer tokens.
-
----
-
-## 3. Session 02 Scope & Invariant Checklist
-
-| Requirement / Invariant | Status | Evidence |
-|---|---|---|
-| General `/api/v1/**` JWT login | Passed | `test_login_success`, `test_login_invalid_credentials_401` |
-| Access / refresh token & expiry | Passed | `test_refresh_success`, `test_jwt_proactive_refresh_when_expired`, `parse_jwt_expiry` |
-| One safe refresh on 401 | Passed | `test_jwt_401_triggers_one_refresh_and_succeeds` |
-| No infinite refresh loop | Passed | `test_jwt_401_no_infinite_loop_on_persistent_401`, `test_jwt_401_refresh_fails_aborts_immediately` |
-| `/api/koreader/**` x-auth-user + MD5 | Passed | `test_koreader_routing_uses_md5_headers_only`, `test_koreader_missing_credentials_raises_auth_error` |
-| Strictly separate auth modes | Passed | `test_strict_auth_mode_separation_violations`, `test_koreader_401_never_attempts_jwt_refresh` |
-| Never log secrets / redact headers | Passed | `test_security_redact_headers`, `test_security_exception_and_model_repr_masking`, `test_security_no_secret_leak_in_logs` |
-| TLS verify ON / explicit opt-in only | Passed | `test_tls_verify_defaults_and_opt_in` |
-| Timeout / retry with backoff | Passed | `test_transient_error_503_retries_and_succeeds`, `test_timeout_and_retry_exhaustion_raises_timeout_error` |
-| Typed error hierarchy | Passed | `OfficialAuthError`, `OfficialPermissionError`, `OfficialTimeoutError`, `OfficialTransportError`, `OfficialBadResponseError` |
-| Read-only health canaries | Passed | `test_read_only_health_canary`, `test_read_only_jwt_auth_canary`, `test_read_only_koreader_auth_canary` |
-| Malformed response handling | Passed | `test_malformed_json_response`, `test_unexpected_json_shape` |
-| No shelf/progress/metadata logic | Preserved | Stubs remain unchanged; zero DB writes or entity mutations |
-
----
-
-## 4. Current Lifecycle State & Next Steps
-
-Codex repaired the Session 02 review findings in the working tree:
-
-- Header filtering now handles HTTP header names case-insensitively, including the 401 refresh path. Public endpoints discard caller-supplied bearer headers.
-- Switching JWT accounts clears previous credentials and tokens; explicit login updates the account identity.
-- Transient retries are limited to safe request methods. Streaming errors consume and close responses before typed error handling; the download helper uses that transport.
-- Auth responses without a valid user ID or bearer username fail closed with 502. Upstream 403 maps to the legacy auth endpoint's 401 response.
-- Protected paths reject public `AuthMode.NONE` calls. Internal helpers with caller-supplied bearer tokens do not refresh another account's stored JWT.
-
-**STOP before merge.** Session 03 starts only after the Session 02 review gate is accepted.

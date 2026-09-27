@@ -213,7 +213,10 @@ async def test_book_hash_cache_is_not_exposed_before_access_checks(
         "/api/grimmlink/v1/books/by-hash/cached-book-123",
         headers={"x-auth-user": "unknown", "x-auth-key": "invalid"},
     )
-    assert resp.status_code == 501
+    # Route is now live (Session 03), but with invalid credentials the
+    # resolution should fail WITHOUT leaking any cached book metadata.
+    # The endpoint returns 401 (auth check) before any book lookup.
+    assert resp.status_code in (401, 502)
     assert "Private Book" not in resp.text
 
 

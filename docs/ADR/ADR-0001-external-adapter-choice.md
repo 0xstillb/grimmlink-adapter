@@ -5,6 +5,12 @@
 - **Authors:** 0xstillb, Gemini Flash 3.8
 - **Reviewer:** GPT-5.6 Sol High (Session 00 Architecture Gate)
 
+**Session 03 amendment (2026-09-26):** The user approved an optional,
+dedicated SELECT-only Grimmory MariaDB lookup for exact book hashes. The
+original zero-direct-access statements below describe the Session 00 design;
+the active exception is documented in `sessions/03_BOOK_IDENTITY.md`. Direct
+database writes remain prohibited.
+
 ---
 
 ## 1. Context and Problem Statement

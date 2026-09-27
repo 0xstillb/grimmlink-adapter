@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,28 @@ class Settings(BaseSettings):
     SQLITE_DB_PATH: str = Field(
         default="data/grimmlink_adapter.db",
         description="Path to SQLite cache/outbox database file",
+    )
+
+    # Optional read-only Grimmory MariaDB identity lookup. The account must be
+    # provisioned with SELECT-only grants outside this application.
+    GRIMMORY_DB_ENABLED: bool = Field(
+        default=False, description="Enable exact-hash lookup against Grimmory MariaDB"
+    )
+    GRIMMORY_DB_HOST: str | None = Field(default=None, description="MariaDB host on a restricted network")
+    GRIMMORY_DB_PORT: int = Field(default=3306, description="MariaDB TCP port")
+    GRIMMORY_DB_NAME: str = Field(default="grimmory", description="Grimmory MariaDB schema")
+    GRIMMORY_DB_USER: str | None = Field(default=None, description="Dedicated SELECT-only account")
+    GRIMMORY_DB_PASSWORD: SecretStr | None = Field(
+        default=None, description="Password for the dedicated SELECT-only account"
+    )
+    GRIMMORY_DB_SSL_CA: str | None = Field(
+        default=None, description="CA bundle to verify MariaDB TLS when using a remote network"
+    )
+    GRIMMORY_DB_CONNECT_TIMEOUT: float = Field(
+        default=5.0, description="MariaDB connection timeout in seconds"
+    )
+    GRIMMORY_DB_QUERY_TIMEOUT: float = Field(
+        default=15.0, description="MariaDB identity query timeout in seconds"
     )
 
     # Logging

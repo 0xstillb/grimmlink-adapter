@@ -1,7 +1,8 @@
 """HTTP client for communicating with unmodified Official Grimmory.
 
 Invariants:
-- Zero direct DB access.
+- This HTTP client never accesses Grimmory's database; Session 03's separate
+  opt-in identity lookup uses a dedicated SELECT-only account.
 - Official Grimmory code remains stock and unmodified.
 - Strictly separate auth modes:
   * General `/api/v1/**`: JWT Bearer authentication only.

@@ -12,6 +12,23 @@
 
 เป้าหมาย: ย้าย GrimmLink ออกจาก Grimmory fork โดย **ไม่แก้ Official Grimmory**, ไม่เขียน DB โดยตรง และรักษา behavior สำคัญของ fork ให้ครบ
 
+Session 03 has a user-approved, read-only MariaDB lookup exception for exact
+hash-to-book identity. It is disabled by default and requires a dedicated
+SELECT-only DB account on a restricted network. It never writes to Grimmory's
+database. See `sessions/03_BOOK_IDENTITY.md` and `docs/HANDOFF.md`.
+
+For a legacy MD5-only client, link each Grimmory user locally once after the
+Adapter is configured. Run this with the same `GRIMMORY_BASE_URL` and
+`SQLITE_DB_PATH` used by the Adapter:
+
+```text
+uv run --no-sync python -m grimmlink_adapter.link_account <username>
+```
+
+The command prompts for the password, checks that KOReader and Official JWT
+authentication identify the same user, and stores a digest of the MD5 key
+plus Official tokens in Adapter SQLite. Protect that file from other users.
+
 ## Target architecture
 
 ```text

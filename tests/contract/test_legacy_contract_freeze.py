@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkAuthErrorResponse,
@@ -229,6 +229,7 @@ class TestContractFixturesValidation:
         rating_item = model.items[0]
         assert rating_item.type == "rating"
         assert rating_item.id == "grimmory-personal-rating"
+        assert rating_item.payload is not None
         assert rating_item.payload["value"] == 8
 
     def test_metadata_batch_fixtures(self) -> None:
@@ -301,7 +302,7 @@ class TestWireSerialization:
         ],
     )
     def test_canonical_wire_keys(
-        self, fixture: str, model_type: type, expected_key: str, forbidden_key: str
+        self, fixture: str, model_type: type[BaseModel], expected_key: str, forbidden_key: str
     ) -> None:
         payload = model_type.model_validate(load_fixture(fixture)).model_dump(
             by_alias=True, exclude_unset=True

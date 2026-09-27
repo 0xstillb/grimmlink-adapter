@@ -15,6 +15,7 @@ from grimmlink_adapter.official import (
     OfficialTransportError,
 )
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
+from grimmlink_adapter.state.linked_accounts import LinkedAccountStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,18 @@ class AuthService:
             try:
                 auth_data = await self.official_client.get_koreader_auth(creds.username, creds.md5_key)
                 user_id = auth_data.get("userId") or auth_data.get("id")
+                if user_id is None:
+                    # Stock Grimmory authenticates the KOReader key but returns
+                    # only the username. Resolve the numeric identity from the
+                    # explicitly linked, same-credential account.
+                    from grimmlink_adapter.config import settings
+
+                    linked = await LinkedAccountStore.get_by_credentials(
+                        settings.GRIMMORY_BASE_URL.rstrip("/"), creds.username, creds.md5_key,
+                    )
+                    user_id = linked.user_id if linked is not None else None
+                if isinstance(user_id, str) and user_id.isdigit():
+                    user_id = int(user_id)
                 if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
                     raise OfficialBadResponseError("KOReader auth response missing a valid user ID")
                 sync_enabled = auth_data.get("syncEnabled", True)

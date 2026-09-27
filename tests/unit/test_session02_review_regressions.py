@@ -1,6 +1,7 @@
 """Regressions for Session 02 review findings."""
 
 import json
+from collections.abc import AsyncGenerator
 
 import httpx
 import pytest
@@ -114,7 +115,7 @@ class TrackedStream(httpx.AsyncByteStream):
     def __init__(self) -> None:
         self.closed = False
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncGenerator[bytes, None]:
         yield b"unavailable"
 
     async def aclose(self) -> None:
@@ -189,6 +190,42 @@ async def test_download_stream_uses_typed_transport_error() -> None:
         await client.download_book_stream(1, "token")
     assert exc.value.status_code == 503
     assert body.closed
+
+
+@pytest.mark.asyncio
+async def test_auth_service_uses_linked_identity_for_stock_koreader_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from grimmlink_adapter.state.linked_accounts import LinkedAccount
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"username": "reader"})
+
+    linked = LinkedAccount(
+        server="http://mock",
+        user_id="17",
+        username="reader",
+        md5_key_digest="unused",
+        access_token="access",
+        refresh_token="refresh",
+    )
+    monkeypatch.setattr(
+        "grimmlink_adapter.state.linked_accounts.LinkedAccountStore.get_by_credentials",
+        AsyncMock(return_value=linked),
+    )
+    monkeypatch.setattr(
+        "grimmlink_adapter.config.settings.GRIMMORY_BASE_URL",
+        "http://mock",
+    )
+    transport = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    service = AuthService(OfficialGrimmoryClient(client=transport))
+
+    result = await service.authorize_client(
+        ClientCredentials(username="reader", md5_key="md5"),
+    )
+    assert result.userId == 17
 
 
 def test_public_request_rejects_none_mode_for_protected_path() -> None:
