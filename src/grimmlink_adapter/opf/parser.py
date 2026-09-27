@@ -135,15 +135,18 @@ def grimmory_file_fingerprint(path: Path) -> str:
     """Match Grimmory FileFingerprint.generateHash partial-MD5 semantics."""
     digest = hashlib.md5()
     size = path.stat().st_size
-    offset = 256
+    # Grimmory's Java loop starts at i=-1. Java masks long shift distances,
+    # making 1024L << -2 evaluate to 0; subsequent offsets are 1024 * 4**i.
+    offsets = (0, *(1024 * (4 ** exponent) for exponent in range(0, 11)))
     with path.open("rb") as handle:
-        while offset < size:
+        for offset in offsets:
+            if offset >= size:
+                break
             handle.seek(offset)
             sample = handle.read(1024)
             if not sample:
                 break
             digest.update(sample)
-            offset *= 4
     return digest.hexdigest()
 
 

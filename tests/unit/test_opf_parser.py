@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from grimmlink_adapter.opf.parser import (
     AmbiguousOPFError,
     UnsafePathError,
     discover_opf,
+    grimmory_file_fingerprint,
     parse_opf,
 )
 from grimmlink_adapter.opf.sidecar import sidecar_payload, write_sidecars
@@ -79,3 +81,15 @@ def test_sidecar_uses_object_cover_and_never_legacy_string(tmp_path: Path) -> No
     assert json.loads(metadata_path.read_text(encoding="utf-8"))["cover"]["path"] == "book.cover.jpg"
     assert cover_path is not None and cover_path.read_bytes() == b"\xff\xd8\xffcover"
     assert book.read_bytes() == b"original"
+
+
+def test_grimmory_fingerprint_matches_java_partial_md5_offsets(tmp_path: Path) -> None:
+    path = tmp_path / "fingerprint.bin"
+    content = bytes(index % 251 for index in range(5000))
+    path.write_bytes(content)
+
+    expected = hashlib.md5()
+    for offset in (0, 1024, 4096):
+        expected.update(content[offset:offset + 1024])
+
+    assert grimmory_file_fingerprint(path) == expected.hexdigest()
