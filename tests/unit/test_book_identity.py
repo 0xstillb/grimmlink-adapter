@@ -562,6 +562,36 @@ async def test_linked_md5_client_gets_verified_book(test_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
+async def test_minimal_identity_response_returns_only_consumed_book_id(test_client: AsyncClient) -> None:
+    await _seed_identity(user="10", current_hash="minimal-md5", book_file_id=101)
+    await LinkedAccountStore.put(LinkedAccount(
+        server=SERVER, user_id="10", username="koreader_user",
+        md5_key_digest=digest_md5_key("some_md5_key"),
+        access_token="linked-jwt", refresh_token=None,
+    ))
+    with (
+        patch.object(settings, "GRIMMLINK_MINIMAL_IDENTITY_RESPONSE", True),
+        patch.object(OfficialGrimmoryClient, "get_koreader_auth", new_callable=AsyncMock,
+                     return_value={"userId": 10}),
+        patch.object(OfficialGrimmoryClient, "get_current_user", new_callable=AsyncMock,
+                     return_value={"id": 10, "username": "koreader_user"}),
+        patch.object(OfficialGrimmoryClient, "get_book_by_id", new_callable=AsyncMock,
+                     return_value={
+                         "id": 42, "title": "Test Book",
+                         "primaryFile": {"id": 100, "fileName": "test.epub"},
+                         "alternativeFormats": [{"id": 101, "fileName": "test.pdf"}],
+                     }) as get_book,
+    ):
+        resp = await test_client.get(
+            "/api/grimmlink/v1/books/by-hash/minimal-md5",
+            headers={"x-auth-user": "koreader_user", "x-auth-key": "some_md5_key"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"id": 42}
+    assert get_book.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_wrong_linked_md5_key_never_uses_saved_bearer(test_client: AsyncClient) -> None:
     await _seed_identity(user="10", current_hash="linked-wrong-key")
     await LinkedAccountStore.put(LinkedAccount(

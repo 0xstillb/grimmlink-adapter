@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from grimmlink_adapter.config import settings
@@ -202,6 +202,9 @@ async def get_book_by_hash(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed during book resolution.",
         ) from exc
+
+    if settings.GRIMMLINK_MINIMAL_IDENTITY_RESPONSE:
+        return JSONResponse(content={"id": identity.book_id})
 
     bearer = await service._get_bearer(creds)
     if not bearer:

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         default=False,
         description="Return Official KOReader progress response without DTO translation",
     )
+    GRIMMLINK_MINIMAL_IDENTITY_RESPONSE: bool = Field(
+        default=False,
+        description="Return only the identity field consumed by GrimmLink hash matching",
+    )
 
     # Local SQLite Cache / Outbox DB
     SQLITE_DB_PATH: str = Field(
