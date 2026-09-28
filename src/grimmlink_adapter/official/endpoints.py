@@ -43,3 +43,4 @@ OFFICIAL_BOOKS_RESET_PERSONAL_RATING = "/api/v1/books/reset-personal-rating"
 
 # Reading Sessions
 OFFICIAL_READING_SESSIONS = "/api/v1/reading-sessions"
+OFFICIAL_READING_SESSIONS_BOOK = "/api/v1/reading-sessions/book/{bookId}"

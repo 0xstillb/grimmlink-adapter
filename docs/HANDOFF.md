@@ -1,8 +1,8 @@
 # Inter-Session Handoff & Governance
 
-- **Current Session:** Session 07 — Rating + Bookmark + Annotation + Cursor/Dedupe
-- **Implementer:** Gemini Flash 3.8 implementation plus Sol gate remediation complete
-- **Current Lifecycle State:** Session 07 gate passed on the unmerged working tree
+- **Current Session:** Session 08 — Reading-session adapter
+- **Implementer:** Gemini implementation followed by Sol gate fixes; unmerged working tree
+- **Current Lifecycle State:** Session 08 gate findings addressed in working tree; verification complete, no merge yet
 - **Timestamp:** 2026-09-28
 
 ---
@@ -393,3 +393,65 @@ Rating reset is explicit: `reset=true`, `deleted=true`, or a non-positive value 
 - **Rule:** Gemini must inspect, implement, test, and update `docs/HANDOFF.md`, then **STOP before merge**.
 - **Sol remediation:** Fixed production outbox integration, timeout recovery, lossless cursor continuation, explicit rating reset validation, unsupported-field dedupe, unmapped deletion reporting, fresh Official-field reconciliation, remote deletion tombstones, and capability advertisement. Added seven focused regression tests covering those paths.
 - **Current Status:** Session 07 implementation and focused remediation are complete. Sol re-review is `APPROVE`; the working tree remains unmerged.
+
+---
+
+## 11. Session 08 — Reading-Session Adapter
+
+The adapter implements `GET/POST /api/grimmlink/v1/reading-sessions` and `POST /api/grimmlink/v1/reading-sessions/batch`. Writes fan out to Official single-session POSTs; reads use Official paginated history with the requesting user's bearer.
+
+### 11.1 Key Architecture & Design Invariants
+
+1. **Deterministic Batch Fanout & Result Aggregation:**
+   - Legacy batch endpoint (`POST /api/grimmlink/v1/reading-sessions/batch`) fans out to Official single-session posts (`POST /api/v1/reading-sessions`).
+   - Results contain `totalRequested`, `successCount`, and per-item `results` (`created`, `duplicate`, `pending`, or `error`).
+   - Supports partial success: an invalid duration/order or non-retryable error in one item records an error status for that specific item without aborting remaining valid sessions in the batch.
+
+2. **Canonical Idempotency Key Format:**
+   - Key is constructed deterministically from preserved legacy identity:
+     `{server}/{user}/{book}/{hash}/{start}/{end}/{device}`
+   - `server`: Normalized Official base URL (e.g. `http://localhost:6060`).
+   - `user`: Resolved username or user ID.
+   - `book`: Upstream `bookId` (or mapped book ID).
+   - `hash`: Book hash (if supplied; empty string if omitted).
+   - `start` / `end`: RFC3339 timestamps (`startTime` and `endTime`).
+   - `device`: Preserved client device identity (combines `device` and `device_id` as `{device}:{device_id}` if both distinct, or whichever is present).
+   - Invariant: Same timestamps on different client devices produce distinct idempotency keys, avoiding cross-device collisions.
+
+3. **Pending / Committed State Persistence (SQLite `reading_sessions_state`):**
+   - Migration `010_reading_sessions.sql` creates the table; `011_reading_session_book_type.sql` safely adds `book_type` to databases that already applied 010.
+   - States: `POSTING` (atomic in-flight claim before upstream POST), `PENDING` (outcome not confirmed), `COMMITTED` (upstream accepted or probed match). A stale `POSTING` claim becomes eligible for reconciliation after two minutes.
+   - Timestamps, duration, book type, page numbers, CFI locations, progress, and error details are persisted.
+
+4. **Timeout-After-POST Mitigation (No Duplicate Blind Retries):**
+   - If an upstream `POST /api/v1/reading-sessions` times out (`OfficialTimeoutError` / HTTP 504), the session remains in `PENDING` state.
+   - On retry or timeout recovery, the adapter does NOT blindly issue another POST. Instead, it probes Official Grimmory's read endpoint: `GET /api/v1/reading-sessions/book/{bookId}`.
+   - Probe exhausts pages and fails closed on read errors or ambiguous matches; an Official ID already claimed by another device is never adopted for this key.
+   - If upstream confirms a unique unclaimed match, the adapter adopts its ID. If no match is visible, it leaves the record `PENDING`: a timed-out POST might still commit later. Single retry returns HTTP 503; batch marks that item `pending`. There is deliberately no blind automatic replay; unresolved rows need later reconciliation or an operator decision.
+   - Reconciliation runs on the next authenticated session-write request, scoped to that Official server and user. It does not run at startup without user credentials and never replays another user's rows with the caller's token.
+
+5. **Local Preservation of Unsupported Legacy Fields:**
+   - Official POST receives `bookId`, `bookType`, times, duration, progress fractions, and start/end locations. It may return HTTP 202 with no session ID.
+   - Unsupported legacy fields (`book_hash`, `device`, `device_id`, `current_page`, `total_pages`, `start_page`, `end_page`) remain in local SQLite; they are not transmitted upstream. Legacy progress percentages always divide by 100, including values below 1%.
+
+6. **Timing Validation:**
+   - Enforces chronological order (`endTime > startTime`), compatible timezone notation, positive duration, and progress in 0–100%. Invalid single sessions return HTTP 400; invalid batch items report `error` without upstream calls.
+
+7. **Capability Advertisement:**
+   - `GET /api/grimmlink/v1/syncs/capabilities` advertises `readingSessions: true`; legacy GET is implemented through authenticated Official paginated GET.
+
+8. **Fork DB Isolation:**
+   - MariaDB / fork database was NOT touched. All state and idempotency tracking are isolated within adapter SQLite.
+
+### 11.2 Verification Evidence
+
+- `.venv\Scripts\ruff.exe check src tests` — **All checks passed!**
+- `.venv\Scripts\mypy.exe src` — **Success: no issues found in 49 source files**.
+- `.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp .codex-tmp/sol-session08-final3` — **288 passed in 22.05s**. Added regression cases for failed probe, later-page match, cross-device collision (including Official 202 without ID), concurrent same-key POSTs, user-scoped recovery, sub-1% progress, authenticated GET, Official HTTP 202, and upgrade from migration 010.
+- `git diff --check` — **Passed cleanly with zero whitespace or line-ending errors**.
+
+### 11.3 Governance Status
+
+- **Implementer:** Gemini initial implementation; Sol gate fixes in this working tree.
+- **Rule:** No merge until the corrected diff passes final review.
+- **Current Status:** Gate findings addressed and tests green; no merge or commit performed. Safety tradeoff: ambiguous or absent upstream confirmation leaves `PENDING` rather than risking duplicate replay.

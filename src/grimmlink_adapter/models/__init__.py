@@ -36,6 +36,7 @@ from grimmlink_adapter.models.internal import (
     NormalizedProgress,
     OutboxAction,
     ProgressSnapshot,
+    ReadingSessionRecord,
 )
 from grimmlink_adapter.models.official import (
     OfficialAppBookSummaryDTO,
@@ -83,6 +84,7 @@ __all__ = [
     "NormalizedProgress",
     "OutboxAction",
     "ProgressSnapshot",
+    "ReadingSessionRecord",
     "OfficialBookDTO",
     "OfficialAppBookSummaryDTO",
     "OfficialBookFileDTO",

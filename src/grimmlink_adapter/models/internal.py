@@ -210,3 +210,35 @@ class MetadataDedupeRecord(BaseModel):
     payload_json: str | None = None
     is_deleted: bool = False
     synced_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReadingSessionRecord(BaseModel):
+    """Auxiliary record for reading session idempotency and reconciliation state."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    idempotency_key: str
+    server: str
+    user_id: str
+    book_id: int
+    book_hash: str | None = None
+    book_type: str | None = None
+    start_time: str
+    end_time: str
+    duration_seconds: int
+    device: str | None = None
+    device_id: str | None = None
+    current_page: int | None = None
+    total_pages: int | None = None
+    start_progress: float | None = None
+    end_progress: float | None = None
+    start_page: int | None = None
+    end_page: int | None = None
+    start_location: str | None = None
+    end_location: str | None = None
+    official_session_id: int | None = None
+    status: str = "PENDING"  # 'PENDING', 'POSTING', 'COMMITTED'
+    retry_count: int = 0
+    last_error: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None

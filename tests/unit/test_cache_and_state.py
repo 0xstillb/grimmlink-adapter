@@ -131,20 +131,31 @@ async def test_migrations_raise_on_missing_or_empty_dir(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_idempotency_not_created_in_scaffold() -> None:
-    """Issue 2 fix verification: No idempotency key must be created when session recording is not implemented."""
-    service = SessionService()
+async def test_session_idempotency_not_created_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Upstream failure must NOT store response in IdempotencyManager."""
+    client = AsyncMock()
+    client.create_reading_session.side_effect = OfficialTimeoutError("timeout")
+    client.get_reading_sessions_for_book.return_value = []
+    from grimmlink_adapter.config import settings
+    from grimmlink_adapter.services import session_service as session_module
+    monkeypatch.setattr(session_module, "get_official_bearer", AsyncMock(return_value="verified_bearer"))
+    service = SessionService(official_client=client)
     req = GrimmlinkReadingSessionSingleRequest(
         bookId=999,
         startTime="2026-09-26T12:00:00Z",
         endTime="2026-09-26T12:30:00Z",
         durationSeconds=1800,
     )
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(HTTPException):
         await service.record_session(req, username="test_user")
-    assert exc_info.value.status_code == 501
 
-    key = generate_session_idempotency_key("test_user", 999, "2026-09-26T12:00:00Z", "2026-09-26T12:30:00Z")
+    key = generate_session_idempotency_key(
+        server=settings.GRIMMORY_BASE_URL,
+        user="test_user",
+        book_id=999,
+        start_time="2026-09-26T12:00:00Z",
+        end_time="2026-09-26T12:30:00Z",
+    )
     stored = await IdempotencyManager.get_response(key)
     assert stored is None, "Idempotency key must NOT be stored for unexecuted mutation"
 

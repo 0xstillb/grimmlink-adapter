@@ -12,7 +12,7 @@ _STATIC_CAPABILITIES = GrimmlinkCapabilitiesResponse(
     webUiProgress=True,
     progressSync=True,
     pdfBridge=True,
-    readingSessions=False,
+    readingSessions=True,
     metadataSync=True,
     shelves=True,
 )

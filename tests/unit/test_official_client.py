@@ -852,6 +852,27 @@ async def test_client_async_context_manager() -> None:
     assert internal_c.is_closed
 
 
+@pytest.mark.asyncio
+async def test_reading_session_post_accepts_documented_202_and_get_rejects_bad_shape() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer verified"
+        if request.method == "POST":
+            assert request.url.path == "/api/v1/reading-sessions"
+            return httpx.Response(202)
+        assert request.url.path == "/api/v1/reading-sessions/book/42"
+        return httpx.Response(200, json={"unexpected": []})
+
+    transport = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://localhost:6060"
+    )
+    client = OfficialGrimmoryClient(client=transport)
+    assert await client.create_reading_session(
+        {"bookId": 42, "startTime": "2026-09-28T10:00:00Z"}, "verified"
+    ) == {"status": "created"}
+    with pytest.raises(OfficialBadResponseError):
+        await client.get_reading_sessions_for_book(42, "verified")
+
+
 # -----------------------------------------------------------------------------
 # 11. Official Bookmark & Rating Client Methods
 # -----------------------------------------------------------------------------

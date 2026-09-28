@@ -328,6 +328,9 @@ class GrimmlinkReadingSessionSingleRequest(BaseModel):
     endLocation: str | None = None
     currentPage: int | None = None
     totalPages: int | None = None
+    startPage: int | None = None
+    endPage: int | None = None
+
 
 
 class GrimmlinkReadingSessionResponse(BaseModel):
@@ -370,7 +373,7 @@ class GrimmlinkReadingSessionResultItem(BaseModel):
 
     index: int | None = None
     sessionId: int | None = None
-    status: str  # 'created', 'duplicate', 'error'
+    status: str  # 'created', 'duplicate', 'pending', 'error'
     message: str | None = None
     startTime: str | None = None
     endTime: str | None = None

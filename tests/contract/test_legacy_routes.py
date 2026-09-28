@@ -81,7 +81,7 @@ async def test_capabilities_endpoint_contract(test_client: AsyncClient) -> None:
     assert data["apiVersion"] == "v1"
     assert data["webUiProgress"] is True
     assert data["progressSync"] is True
-    assert data["readingSessions"] is False
+    assert data["readingSessions"] is True
     assert data["metadataSync"] is True
     assert data["pdfBridge"] is True
     assert data["shelves"] is True
@@ -235,8 +235,20 @@ async def test_metadata_sync_routes_contract(
 
 
 @pytest.mark.asyncio
-async def test_reading_sessions_batch_returns_501_in_scaffold(test_client: AsyncClient) -> None:
-    """Issue 2 fix verification: Reading sessions batch returns 501 in scaffold."""
+async def test_reading_sessions_batch_calls_official_session(
+    test_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reading sessions batch fans out to Official single session POST and aggregates."""
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.session_service.get_official_bearer",
+        AsyncMock(return_value="verified-bearer"),
+    )
+    mock_create = AsyncMock(return_value={"id": 101})
+    monkeypatch.setattr(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.create_reading_session",
+        mock_create,
+    )
     payload = {
         "bookId": 10,
         "sessions": [
@@ -247,29 +259,41 @@ async def test_reading_sessions_batch_returns_501_in_scaffold(test_client: Async
                 "startPage": 10,
                 "endPage": 35,
             }
-        ]
+        ],
     }
     resp = await test_client.post(
         "/api/grimmlink/v1/reading-sessions/batch",
         json=payload,
         headers=AUTH_HEADERS,
     )
-    assert resp.status_code == 501
-    assert "not supported in session 00 scaffold" in resp.json()["detail"].lower()
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["totalRequested"] == 1
+    assert data["successCount"] == 1
+    assert len(data["results"]) == 1
+    assert data["results"][0]["status"] == "created"
+    assert data["results"][0]["sessionId"] == 101
+    mock_create.assert_awaited_once()
+
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/grimmlink/v1/reading-sessions?bookId=42",
-    ],
-)
-async def test_unimplemented_reads_never_return_empty_success(
-    test_client: AsyncClient, path: str
+async def test_reading_session_history_route_returns_official_items(
+    test_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    resp = await test_client.get(path, headers=AUTH_HEADERS)
-    assert resp.status_code == 501
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.session_service.get_official_bearer",
+        AsyncMock(return_value="verified-bearer"),
+    )
+    monkeypatch.setattr(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.get_reading_sessions_for_book",
+        AsyncMock(return_value=[{"id": 77, "bookId": 42}]),
+    )
+    resp = await test_client.get(
+        "/api/grimmlink/v1/reading-sessions?bookId=42", headers=AUTH_HEADERS
+    )
+    assert resp.status_code == 200
+    assert resp.json() == [{"id": 77, "bookId": 42}]
 
 
 @pytest.mark.asyncio

@@ -53,6 +53,8 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_KOREADER_PROGRESS_HASH,
     OFFICIAL_MAGIC_SHELF_BOOKS,
     OFFICIAL_MAGIC_SHELVES,
+    OFFICIAL_READING_SESSIONS,
+    OFFICIAL_READING_SESSIONS_BOOK,
     OFFICIAL_SHELVES,
     OFFICIAL_SHELVES_ASSIGN,
     OFFICIAL_USERS_ME,
@@ -1443,6 +1445,97 @@ class OfficialGrimmoryClient:
             f"Failed to delete bookmark: HTTP {resp.status_code}",
             status_code=resp.status_code,
             method="DELETE",
+            url=url,
+            response_body=resp.text,
+        )
+
+    async def create_reading_session(
+        self, payload: dict[str, Any], bearer_token: str,
+    ) -> dict[str, Any]:
+        """Post a single reading session to Official Grimmory."""
+        resp = await self._send_request(
+            method="POST",
+            path=OFFICIAL_READING_SESSIONS,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json=payload,
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized reading session creation",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_READING_SESSIONS,
+                response_body=resp.text,
+            )
+        if resp.status_code not in (200, 201, 202, 204):
+            raise OfficialBadResponseError(
+                f"Failed to create reading session: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_READING_SESSIONS,
+                response_body=resp.text,
+            )
+        if not resp.content:
+            return {"status": "created"}
+        try:
+            parsed = resp.json()
+            if isinstance(parsed, dict):
+                return parsed
+            return {"id": parsed} if isinstance(parsed, int) else {"status": "created"}
+        except (ValueError, json.JSONDecodeError):
+            return {"status": "created"}
+
+    async def get_reading_sessions_for_book(
+        self, book_id: int, bearer_token: str, page: int = 0, size: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Fetch recorded reading sessions for a book from Official Grimmory."""
+        url = OFFICIAL_READING_SESSIONS_BOOK.format(bookId=book_id)
+        resp = await self._send_request(
+            method="GET",
+            path=url,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            params={"page": page, "size": size},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized access to reading sessions",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch reading sessions: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        try:
+            data = resp.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise OfficialBadResponseError(
+                "Reading sessions response was not valid JSON",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            ) from exc
+
+        if isinstance(data, list) and all(isinstance(item, dict) for item in data):
+            return data
+        if isinstance(data, dict):
+            for key in ("content", "items", "sessions"):
+                content = data.get(key)
+                if isinstance(content, list) and all(isinstance(item, dict) for item in content):
+                    return content
+        raise OfficialBadResponseError(
+            "Reading sessions response had an unexpected shape",
+            status_code=resp.status_code,
+            method="GET",
             url=url,
             response_body=resp.text,
         )

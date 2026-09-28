@@ -1,5 +1,6 @@
 """Unit tests for progress calculation and session idempotency logic."""
 
+from grimmlink_adapter.config import settings
 from grimmlink_adapter.services.metadata_service import normalize_rating
 from grimmlink_adapter.services.progress_service import calculate_display_percentage
 from grimmlink_adapter.services.session_service import generate_session_idempotency_key
@@ -38,4 +39,5 @@ def test_session_idempotency_key_deterministic() -> None:
 
     assert key1 == key2
     assert key1 != key3
-    assert len(key1) == 64  # SHA-256 hex digest
+    expected_prefix = settings.GRIMMORY_BASE_URL.rstrip("/")
+    assert key1 == f"{expected_prefix}/alice/42//2026-09-26T10:00:00Z/2026-09-26T10:30:00Z/kobo1"

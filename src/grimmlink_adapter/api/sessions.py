@@ -19,11 +19,11 @@ _session_service = SessionService()
 @router.get("", response_model=list[dict[str, Any]])
 async def get_sessions(
     bookId: int = Query(..., description="Target book ID"),
-    limit: int = Query(50, description="Max session records to return"),
+    limit: int = Query(50, ge=1, le=500, description="Max session records to return"),
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> list[dict[str, Any]]:
     """Retrieve recorded reading sessions for a book."""
-    return await _session_service.get_reading_sessions(bookId, limit)
+    return await _session_service.get_reading_sessions(bookId, limit, creds=creds)
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -33,7 +33,7 @@ async def record_session(
 ) -> None:
     """Record a single reading session idempotently."""
     username = creds.username or "anonymous"
-    await _session_service.record_session(request, username=username)
+    await _session_service.record_session(request, creds=creds, username=username)
 
 
 @router.post("/batch", response_model=GrimmlinkReadingSessionBatchResponse)
@@ -43,4 +43,4 @@ async def record_sessions_batch(
 ) -> GrimmlinkReadingSessionBatchResponse:
     """Record a batch of reading sessions idempotently."""
     username = creds.username or "anonymous"
-    return await _session_service.record_sessions_batch(request, username=username)
+    return await _session_service.record_sessions_batch(request, creds=creds, username=username)
