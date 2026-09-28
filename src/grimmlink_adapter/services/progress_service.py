@@ -516,7 +516,9 @@ class ProgressService:
                         projection_bearer,
                     )
                     if await self._mark_reading_if_started(
-                        resolved_book_id, projection_bearer, snapshot.display_percent,
+                        resolved_book_id,
+                        projection_bearer,
+                        snapshot.current_page is not None or bool(snapshot.native_location),
                     ):
                         projection = "koreader-native+official-app+reading-status"
                     else:
@@ -591,7 +593,9 @@ class ProgressService:
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
             status_marked = await self._mark_reading_if_started(
-                snapshot.book_id, bearer, snapshot.display_percent,
+                snapshot.book_id,
+                bearer,
+                snapshot.current_page is not None or bool(snapshot.native_location),
             )
             await ProgressStateCache.put(owner_key, snapshot)
             return {
@@ -669,17 +673,31 @@ class ProgressService:
         except OfficialClientError as exc:
             raise self._upstream_error(exc) from exc
 
-        # When the request identifies a book, mirror the write through the
-        # JWT projection so WebUI/file-level PDF and EPUB positions round-trip.
+        status_marked = False
+        if snapshot.current_page is not None or snapshot.native_location:
+            try:
+                projection_bearer, resolved_book_id, _, _ = await self._resolve_bearer_book(
+                    creds, snapshot.book_hash, snapshot.book_id,
+                )
+                status_marked = await self._mark_reading_if_started(
+                    resolved_book_id,
+                    projection_bearer,
+                    snapshot.current_page is not None or bool(snapshot.native_location),
+                )
+            except (HTTPException, OfficialClientError) as exc:
+                logger.warning("Could not resolve EPUB identity for first-progress status: %s", type(exc).__name__)
         await ProgressStateCache.put(owner_key, snapshot)
         extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
-        return {"status": "progress updated", **extras} if isinstance(result, dict) else {"status": "progress updated"}
+        response = {"status": "progress updated", **extras} if isinstance(result, dict) else {"status": "progress updated"}
+        if status_marked:
+            response["projection"] = "koreader-native+reading-status"
+        return response
 
     async def _mark_reading_if_started(
-        self, book_id: int, bearer: str, display_percent: float | None,
+        self, book_id: int, bearer: str, has_position: bool,
     ) -> bool:
-        """Mark an untouched book as READING after its first real progress."""
-        if display_percent is None or display_percent <= 0:
+        """Mark an untouched book as READING after its first real position."""
+        if not has_position:
             return False
         try:
             current = await self.official_client.get_app_book_progress(book_id, bearer)

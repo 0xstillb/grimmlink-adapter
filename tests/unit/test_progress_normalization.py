@@ -81,13 +81,22 @@ async def test_progress_put_converts_percent_to_official_fraction() -> None:
     client = AsyncMock()
     client.get_koreader_progress.return_value = {}
     client.update_koreader_progress.return_value = {}
-    result = await ProgressService(client).update_progress(
-        KoreaderProgressPayload(
-            bookHash="epub-hash", fileFormat="EPUB", progress="/body/3", location="/body/3",
-            percentage=22.0, timestamp=100,
-        ),
-        CREDS,
-    )
+    client.get_app_book_progress.return_value = {"readStatus": "UNREAD"}
+    client.update_read_status.return_value = []
+    with patch.object(
+        ProgressService,
+        "_resolve_bearer_book",
+        new=AsyncMock(return_value=("verified-bearer", 25, 25, "EPUB")),
+    ):
+        result = await ProgressService(client).update_progress(
+            KoreaderProgressPayload(
+                bookHash="epub-hash", fileFormat="EPUB", progress="/body/3", location="/body/3",
+                percentage=22.0, timestamp=100,
+            ),
+            CREDS,
+        )
+    assert result["projection"] == "koreader-native+reading-status"
+    client.update_read_status.assert_awaited_once_with(25, "READING", "verified-bearer")
     assert result["status"] == "progress updated"
     payload = client.update_koreader_progress.await_args.args[0]
     assert payload["percentage"] == 0.22
