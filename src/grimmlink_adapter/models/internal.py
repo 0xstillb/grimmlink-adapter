@@ -237,7 +237,7 @@ class ReadingSessionRecord(BaseModel):
     start_location: str | None = None
     end_location: str | None = None
     official_session_id: int | None = None
-    status: str = "PENDING"  # 'PENDING', 'POSTING', 'COMMITTED'
+    status: str = "PENDING"  # 'PENDING', 'POSTING', 'COMMITTED', 'REJECTED'
     retry_count: int = 0
     last_error: str | None = None
     created_at: datetime | None = None

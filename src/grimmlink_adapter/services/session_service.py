@@ -26,6 +26,10 @@ from grimmlink_adapter.official.exceptions import (
     OfficialPermissionError,
     OfficialTimeoutError,
 )
+from grimmlink_adapter.official.identity_lookup import (
+    GrimmoryIdentityLookup,
+    GrimmoryIdentityLookupError,
+)
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
 from grimmlink_adapter.services.request_auth import get_official_bearer
 from grimmlink_adapter.state.book_identity import BookIdentityStore
@@ -155,6 +159,7 @@ class SessionService:
 
     def __init__(self, official_client: OfficialGrimmoryClient | None = None) -> None:
         self.official_client = official_client or OfficialGrimmoryClient()
+        self.identity_lookup = GrimmoryIdentityLookup()
 
     async def get_reading_sessions(
         self, book_id: int, limit: int = 50, creds: ClientCredentials | None = None,
@@ -212,15 +217,22 @@ class SessionService:
         owner_key: str,
         server: str,
     ) -> int:
-        """Resolve authoritative book ID from bookId or bookHash."""
-        if book_id is not None and book_id > 0:
-            return book_id
-        if not book_hash or not book_hash.strip():
+        """Resolve the authoritative book ID for a session.
+
+        A hash is authoritative whenever the client supplies both fields.  KOReader
+        can queue a stale ``bookId`` after a library re-import, so trusting that ID
+        would make Official lookups and the eventual POST target a nonexistent book.
+        """
+        hash_val = book_hash.strip() if book_hash and book_hash.strip() else None
+        if hash_val is None:
+            if book_id is not None and book_id > 0:
+                # Preserve the legacy bookId-only contract.
+                return book_id
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Either bookId or bookHash is required for reading sessions.",
             )
-        hash_val = book_hash.strip()
+
         rows = await BookIdentityStore.lookup_by_current_hash(server, owner_key, hash_val)
         if not rows:
             rows = await BookIdentityStore.lookup_by_initial_hash(server, owner_key, hash_val)
@@ -231,9 +243,95 @@ class SessionService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Ambiguous book hash {hash_val}; multiple books matched.",
             )
+
+        # The local cache is populated by book downloads and may not contain a
+        # book that KOReader learned from a prior library scan.  Fall back to the
+        # explicitly configured SELECT-only Grimmory identity lookup so a valid
+        # hash can still be posted to the authoritative book ID.
+        try:
+            official_rows = await self.identity_lookup.lookup_current_hash(hash_val)
+            if not official_rows:
+                official_rows = await self.identity_lookup.lookup_initial_hash(hash_val)
+        except GrimmoryIdentityLookupError as exc:
+            logger.warning("Authoritative identity lookup unavailable: %s", type(exc).__name__)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Book identity lookup is temporarily unavailable.",
+            ) from exc
+        if len(official_rows) == 1:
+            return official_rows[0].book_id
+        if len(official_rows) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ambiguous book hash {hash_val}; multiple books matched.",
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No verified book found matching hash {hash_val}.",
+        )
+
+    async def _record_rejected_session(
+        self,
+        *,
+        book_id: int,
+        book_hash: str | None,
+        book_type: str | None,
+        start_time: str,
+        end_time: str,
+        duration_seconds: int,
+        device: str | None,
+        device_id: str | None,
+        current_page: int | None = None,
+        total_pages: int | None = None,
+        start_progress: float | None = None,
+        end_progress: float | None = None,
+        start_page: int | None = None,
+        end_page: int | None = None,
+        start_location: str | None = None,
+        end_location: str | None = None,
+        server: str,
+        user: str,
+        reason: str,
+    ) -> None:
+        """Persist a permanent resolution failure without claiming an upstream write.
+
+        Rejected rows remain auditable but are excluded from pending recovery, so an
+        unknown or ambiguous hash cannot cause an endless retry loop.
+        """
+        idempotency_key = generate_session_idempotency_key(
+            server=server,
+            user=user,
+            book_id=book_id,
+            book_hash=book_hash,
+            start_time=start_time,
+            end_time=end_time,
+            device=device,
+            device_id=device_id,
+        )
+        await ReadingSessionStore.record_session(
+            ReadingSessionRecord(
+                idempotency_key=idempotency_key,
+                server=server,
+                user_id=user,
+                book_id=book_id,
+                book_hash=book_hash,
+                book_type=book_type,
+                start_time=start_time,
+                end_time=end_time,
+                duration_seconds=duration_seconds,
+                device=device,
+                device_id=device_id,
+                current_page=current_page,
+                total_pages=total_pages,
+                start_progress=start_progress,
+                end_progress=end_progress,
+                start_page=start_page,
+                end_page=end_page,
+                start_location=start_location,
+                end_location=end_location,
+                status="REJECTED",
+                last_error=reason,
+            )
         )
 
     async def _probe_upstream_session(
@@ -440,7 +538,37 @@ class SessionService:
     ) -> bool:
         """Record a single reading session idempotently."""
         server, user, bearer = await self._resolve_auth(creds, username, bearer_token)
-        book_id = await self._resolve_book_id(session.bookId, session.bookHash, user, server)
+        try:
+            book_id = await self._resolve_book_id(session.bookId, session.bookHash, user, server)
+        except HTTPException as exc:
+            if exc.status_code not in (status.HTTP_404_NOT_FOUND, status.HTTP_409_CONFLICT):
+                raise
+            reason = str(exc.detail)
+            await self._record_rejected_session(
+                book_id=session.bookId,
+                book_hash=session.bookHash,
+                book_type=session.bookType,
+                start_time=session.startTime,
+                end_time=session.endTime,
+                duration_seconds=session.durationSeconds,
+                device=session.device,
+                device_id=session.deviceId,
+                current_page=session.currentPage,
+                total_pages=session.totalPages,
+                start_progress=session.startProgress,
+                end_progress=session.endProgress,
+                start_page=session.startPage,
+                end_page=session.endPage,
+                start_location=session.startLocation,
+                end_location=session.endLocation,
+                server=server,
+                user=user,
+                reason=reason,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Reading session rejected: {reason}",
+            ) from exc
 
         # Validate timing upfront for single request
         try:
@@ -518,10 +646,53 @@ class SessionService:
     ) -> GrimmlinkReadingSessionBatchResponse:
         """Record batch of reading sessions idempotently, fanning out into single POSTs."""
         server, user, bearer = await self._resolve_auth(creds, username, bearer_token)
-        book_id = await self._resolve_book_id(request.bookId, request.bookHash, user, server)
-        await self.recover_pending_sessions(bearer_token=bearer, user_id=user, server=server)
-
         results: list[GrimmlinkReadingSessionResultItem] = []
+        try:
+            book_id = await self._resolve_book_id(request.bookId, request.bookHash, user, server)
+        except HTTPException as exc:
+            if exc.status_code not in (status.HTTP_404_NOT_FOUND, status.HTTP_409_CONFLICT):
+                raise
+            reason = str(exc.detail)
+            for i, item in enumerate(request.sessions):
+                book_hash = getattr(item, "bookHash", None) or request.bookHash
+                device = getattr(item, "device", None) or request.device
+                device_id = getattr(item, "deviceId", None) or request.deviceId
+                await self._record_rejected_session(
+                    book_id=request.bookId,
+                    book_hash=book_hash,
+                    book_type=request.bookType,
+                    start_time=item.startTime,
+                    end_time=item.endTime,
+                    duration_seconds=item.durationSeconds,
+                    device=device,
+                    device_id=device_id,
+                    start_progress=item.startProgress,
+                    end_progress=item.endProgress,
+                    start_page=item.startPage,
+                    end_page=item.endPage,
+                    start_location=item.startLocation,
+                    end_location=item.endLocation,
+                    server=server,
+                    user=user,
+                    reason=reason,
+                )
+                results.append(
+                    GrimmlinkReadingSessionResultItem(
+                        index=i,
+                        sessionId=None,
+                        status="rejected",
+                        message=reason,
+                        startTime=item.startTime,
+                        endTime=item.endTime,
+                    )
+                )
+            return GrimmlinkReadingSessionBatchResponse(
+                totalRequested=len(request.sessions),
+                successCount=0,
+                results=results,
+            )
+
+        await self.recover_pending_sessions(bearer_token=bearer, user_id=user, server=server)
 
         for i, item in enumerate(request.sessions):
             book_hash = getattr(item, "bookHash", None) or request.bookHash

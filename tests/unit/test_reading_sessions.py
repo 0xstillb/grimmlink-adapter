@@ -40,6 +40,7 @@ from grimmlink_adapter.services.session_service import (
     generate_session_idempotency_key,
     validate_session_timing,
 )
+from grimmlink_adapter.state.book_identity import BookIdentityStore
 from grimmlink_adapter.state.database import get_connection
 from grimmlink_adapter.state.migrations import apply_migrations
 from grimmlink_adapter.state.reading_sessions import ReadingSessionStore
@@ -164,6 +165,15 @@ async def test_record_single_session_success(
         "grimmlink_adapter.services.session_service.get_official_bearer",
         AsyncMock(return_value=verified_bearer),
     )
+    await BookIdentityStore.upsert(
+        server=settings.GRIMMORY_BASE_URL.rstrip("/"),
+        user=str(verified_bearer.user_id),
+        current_hash="d41d8cd98f00b204e9800998ecf8427e",
+        initial_hash="d41d8cd98f00b204e9800998ecf8427e",
+        book_id=42,
+        book_file_id=42,
+        fmt="EPUB",
+    )
     mock_client = OfficialGrimmoryClient()
     mock_client.create_reading_session = AsyncMock(return_value={"id": 501})  # type: ignore[method-assign]
     service = SessionService(mock_client)
@@ -224,6 +234,104 @@ async def test_record_single_session_success(
 
 
 @pytest.mark.asyncio
+async def test_stale_book_id_with_hash_uses_authoritative_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_creds: ClientCredentials,
+    verified_bearer: VerifiedBearer,
+) -> None:
+    """A stale KOReader ID must not override a verified hash-to-book mapping."""
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.session_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    book_hash = "valid-hash-for-real-book"
+    await BookIdentityStore.upsert(
+        server=settings.GRIMMORY_BASE_URL.rstrip("/"),
+        user=str(verified_bearer.user_id),
+        current_hash=book_hash,
+        initial_hash=book_hash,
+        book_id=2042,
+        book_file_id=7,
+        fmt="EPUB",
+    )
+
+    mock_client = OfficialGrimmoryClient()
+    mock_client.create_reading_session = AsyncMock(return_value={"id": 1501})  # type: ignore[method-assign]
+    service = SessionService(mock_client)
+    request = GrimmlinkReadingSessionSingleRequest(
+        bookId=1100,
+        bookHash=book_hash,
+        startTime="2026-09-28T10:00:00Z",
+        endTime="2026-09-28T10:30:00Z",
+        durationSeconds=1800,
+    )
+
+    assert await service.record_session(request, creds=mock_creds) is True
+    payload = mock_client.create_reading_session.call_args.args[0]  # type: ignore[attr-defined]
+    assert payload["bookId"] == 2042
+    assert payload["bookId"] != request.bookId
+
+    key = generate_session_idempotency_key(
+        server=settings.GRIMMORY_BASE_URL.rstrip("/"),
+        user=str(verified_bearer.user_id),
+        book_id=2042,
+        book_hash=book_hash,
+        start_time=request.startTime,
+        end_time=request.endTime,
+    )
+    record = await ReadingSessionStore.get_by_idempotency_key(key)
+    assert record is not None
+    assert record.book_id == 2042
+    assert record.status == "COMMITTED"
+
+
+@pytest.mark.asyncio
+async def test_unresolvable_hash_is_rejected_and_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_creds: ClientCredentials,
+    verified_bearer: VerifiedBearer,
+) -> None:
+    """Unknown hash failures are auditable and excluded from pending recovery."""
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.session_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    mock_client = OfficialGrimmoryClient()
+    mock_client.create_reading_session = AsyncMock()  # type: ignore[method-assign]
+    service = SessionService(mock_client)
+    request = GrimmlinkReadingSessionSingleRequest(
+        bookId=1100,
+        bookHash="missing-book-hash",
+        startTime="2026-09-28T10:00:00Z",
+        endTime="2026-09-28T10:30:00Z",
+        durationSeconds=1800,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await service.record_session(request, creds=mock_creds)
+    assert exc.value.status_code == 422
+    assert "rejected" in str(exc.value.detail).lower()
+    mock_client.create_reading_session.assert_not_called()  # type: ignore[attr-defined]
+
+    key = generate_session_idempotency_key(
+        server=settings.GRIMMORY_BASE_URL.rstrip("/"),
+        user=str(verified_bearer.user_id),
+        book_id=1100,
+        book_hash="missing-book-hash",
+        start_time=request.startTime,
+        end_time=request.endTime,
+    )
+    record = await ReadingSessionStore.get_by_idempotency_key(key)
+    assert record is not None
+    assert record.status == "REJECTED"
+    assert record.official_session_id is None
+    assert "No verified book" in (record.last_error or "")
+    assert await ReadingSessionStore.list_pending(
+        settings.GRIMMORY_BASE_URL.rstrip("/"), str(verified_bearer.user_id)
+    ) == []
+
+
+@pytest.mark.asyncio
 async def test_record_single_session_invalid_duration_order_rejected(
     monkeypatch: pytest.MonkeyPatch,
     mock_creds: ClientCredentials,
@@ -281,6 +389,15 @@ async def test_record_sessions_batch_fanout_and_aggregation(
     monkeypatch.setattr(
         "grimmlink_adapter.services.session_service.get_official_bearer",
         AsyncMock(return_value=verified_bearer),
+    )
+    await BookIdentityStore.upsert(
+        server=settings.GRIMMORY_BASE_URL.rstrip("/"),
+        user=str(verified_bearer.user_id),
+        current_hash="hash123",
+        initial_hash="hash123",
+        book_id=42,
+        book_file_id=42,
+        fmt="EPUB",
     )
     mock_client = OfficialGrimmoryClient()
     mock_client.create_reading_session = AsyncMock(  # type: ignore[method-assign]

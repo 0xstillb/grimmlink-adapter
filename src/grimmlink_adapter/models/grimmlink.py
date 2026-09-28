@@ -373,7 +373,7 @@ class GrimmlinkReadingSessionResultItem(BaseModel):
 
     index: int | None = None
     sessionId: int | None = None
-    status: str  # 'created', 'duplicate', 'pending', 'error'
+    status: str  # 'created', 'duplicate', 'pending', 'rejected', 'error'
     message: str | None = None
     startTime: str | None = None
     endTime: str | None = None
