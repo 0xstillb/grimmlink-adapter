@@ -119,6 +119,37 @@ async def test_assign_shelves_preserves_forbidden_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_shelf_list_endpoints_accept_json_arrays() -> None:
+    regular_shelves = [{"id": 7, "name": "To Read"}, {"id": 8, "name": "Finished"}]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer verified"
+        if request.url.path == "/api/v1/shelves":
+            return httpx.Response(200, json=regular_shelves)
+        if request.url.path == "/api/v1/app/shelves/magic":
+            return httpx.Response(200, json=[])
+        if request.url.path == "/api/v1/shelves/7/books":
+            return httpx.Response(200, json=[{"bookId": 42}])
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    assert await client.get_regular_shelves("verified") == regular_shelves
+    assert await client.get_magic_shelves("verified") == []
+    assert await client.get_shelf_books(7, "verified") == [{"bookId": 42}]
+
+
+@pytest.mark.asyncio
+async def test_object_endpoint_still_rejects_json_array() -> None:
+    response = httpx.Response(200, json=[])
+    client = OfficialGrimmoryClient()
+
+    with pytest.raises(OfficialBadResponseError, match="Expected JSON object response"):
+        client._parse_json(response, "GET", "/api/v1/users/me")
+
+
+@pytest.mark.asyncio
 async def test_app_progress_and_manual_status_use_official_schemas() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer verified"

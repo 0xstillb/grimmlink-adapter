@@ -17,7 +17,7 @@ Invariants:
 import asyncio
 import json
 import logging
-from typing import Any, cast
+from typing import Any, Literal, cast, overload
 
 import httpx
 
@@ -641,13 +641,32 @@ class OfficialGrimmoryClient:
 
         raise OfficialTransportError(f"Request failed without response after {total_attempts} attempts", method=method, url=url)
 
-    def _parse_json(self, resp: httpx.Response, method: str, url: str) -> dict[str, Any]:
-        """Safely parse JSON response body with typed bad-response errors."""
+    @overload
+    def _parse_json(
+        self, resp: httpx.Response, method: str, url: str, *, expected_shape: Literal["object"] = "object",
+    ) -> dict[str, Any]: ...
+
+    @overload
+    def _parse_json(
+        self, resp: httpx.Response, method: str, url: str, *, expected_shape: Literal["array"],
+    ) -> list[Any]: ...
+
+    def _parse_json(
+        self,
+        resp: httpx.Response,
+        method: str,
+        url: str,
+        *,
+        expected_shape: Literal["object", "array"] = "object",
+    ) -> dict[str, Any] | list[Any]:
+        """Safely parse JSON, validating the endpoint's expected top-level shape."""
         try:
             parsed = resp.json()
-            if not isinstance(parsed, dict):
+            expected_type = dict if expected_shape == "object" else list
+            if not isinstance(parsed, expected_type):
+                expected_name = "object" if expected_shape == "object" else "array"
                 raise OfficialBadResponseError(
-                    f"Expected JSON object response, got {type(parsed).__name__}",
+                    f"Expected JSON {expected_name} response, got {type(parsed).__name__}",
                     status_code=resp.status_code,
                     method=method,
                     url=url,
@@ -1040,7 +1059,7 @@ class OfficialGrimmoryClient:
                 url=OFFICIAL_SHELVES,
                 response_body=resp.text,
             )
-        data = self._parse_json(resp, "GET", OFFICIAL_SHELVES)
+        data = self._parse_json(resp, "GET", OFFICIAL_SHELVES, expected_shape="array")
         if isinstance(data, list) and all(isinstance(item, dict) for item in data):
             return data
         raise OfficialBadResponseError(
@@ -1068,7 +1087,7 @@ class OfficialGrimmoryClient:
                 f"Failed to fetch shelf books: HTTP {resp.status_code}",
                 status_code=resp.status_code, method="GET", url=url, response_body=resp.text,
             )
-        data = self._parse_json(resp, "GET", url)
+        data = self._parse_json(resp, "GET", url, expected_shape="array")
         if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
             raise OfficialBadResponseError(
                 "Expected list of shelf books", status_code=resp.status_code, method="GET", url=url,
@@ -1100,7 +1119,7 @@ class OfficialGrimmoryClient:
                 url=OFFICIAL_MAGIC_SHELVES,
                 response_body=resp.text,
             )
-        data = self._parse_json(resp, "GET", OFFICIAL_MAGIC_SHELVES)
+        data = self._parse_json(resp, "GET", OFFICIAL_MAGIC_SHELVES, expected_shape="array")
         if not isinstance(data, list):
             raise OfficialBadResponseError(
                 "Expected list of magic shelves",
