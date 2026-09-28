@@ -148,6 +148,23 @@ async def test_progress_get_rejects_empty_official_snapshot() -> None:
 
 
 @pytest.mark.asyncio
+async def test_native_progress_get_preserves_official_wire_payload() -> None:
+    client = AsyncMock()
+    native_payload = {
+        "timestamp": 100,
+        "document": "pdf-hash",
+        "percentage": 0.0181,
+        "progress": "12",
+        "device": "cph2797",
+        "device_id": "device-1",
+    }
+    client.get_koreader_progress.return_value = native_payload
+    result = await ProgressService(client).get_native_progress("pdf-hash", CREDS)
+    assert result == native_payload
+    client.get_koreader_progress.assert_awaited_once_with("pdf-hash", "reader", "md5")
+
+
+@pytest.mark.asyncio
 async def test_progress_put_rejects_stale_timestamp_and_force_overrides() -> None:
     client = AsyncMock()
     client.get_koreader_progress.side_effect = [

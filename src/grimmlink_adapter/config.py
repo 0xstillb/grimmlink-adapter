@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         default=False,
         description="Proxy MD5 GrimmLink book lookup directly to Official's native route",
     )
+    GRIMMLINK_NATIVE_PROGRESS_PROXY: bool = Field(
+        default=False,
+        description="Return Official KOReader progress response without DTO translation",
+    )
 
     # Local SQLite Cache / Outbox DB
     SQLITE_DB_PATH: str = Field(

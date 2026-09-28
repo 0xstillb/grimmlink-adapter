@@ -401,6 +401,20 @@ class ProgressService:
         if creds.bearer_token and creds.username and creds.md5_key:
             await get_official_bearer(creds)
 
+    async def get_native_progress(
+        self, book_hash: str, creds: ClientCredentials | None = None,
+    ) -> dict[str, Any]:
+        """Fetch the unmodified Official KOReader progress DTO."""
+        assert creds is not None
+        username, md5_key = self._require_md5(creds)
+        try:
+            raw = await self.official_client.get_koreader_progress(book_hash, username, md5_key)
+        except OfficialClientError as exc:
+            raise self._upstream_error(exc) from exc
+        if not raw or (raw.get("progress") is None and raw.get("percentage") is None):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No progress found for book hash.")
+        return raw
+
     async def get_progress(
         self, book_hash: str, creds: ClientCredentials | None = None,
     ) -> KoreaderProgressPayload:
