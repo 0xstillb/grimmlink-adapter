@@ -515,7 +515,12 @@ class ProgressService:
                         {"pdfProgress": {"page": page, "percentage": snapshot.display_percent}},
                         projection_bearer,
                     )
-                    projection = "koreader-native+official-app"
+                    if await self._mark_reading_if_started(
+                        resolved_book_id, projection_bearer, snapshot.display_percent,
+                    ):
+                        projection = "koreader-native+official-app+reading-status"
+                    else:
+                        projection = "koreader-native+official-app"
                 except (HTTPException, OfficialClientError) as exc:
                     # Native KOReader sync already succeeded. Keep that result
                     # visible to the device, but make an App projection failure
@@ -585,8 +590,14 @@ class ProgressService:
                 )
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
+            status_marked = await self._mark_reading_if_started(
+                snapshot.book_id, bearer, snapshot.display_percent,
+            )
             await ProgressStateCache.put(owner_key, snapshot)
-            return {"status": "progress updated", "projection": "official-app"}
+            return {
+                "status": "progress updated",
+                "projection": "official-app+reading-status" if status_marked else "official-app",
+            }
 
         assert username is not None and md5_key is not None
         if snapshot.is_fixed_page:
@@ -663,6 +674,22 @@ class ProgressService:
         await ProgressStateCache.put(owner_key, snapshot)
         extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
         return {"status": "progress updated", **extras} if isinstance(result, dict) else {"status": "progress updated"}
+
+    async def _mark_reading_if_started(
+        self, book_id: int, bearer: str, display_percent: float | None,
+    ) -> bool:
+        """Mark an untouched book as READING after its first real progress."""
+        if display_percent is None or display_percent <= 0:
+            return False
+        try:
+            current = await self.official_client.get_app_book_progress(book_id, bearer)
+            if not isinstance(current, dict) or current.get("readStatus") != "UNREAD":
+                return False
+            await self.official_client.update_read_status(book_id, "READING", bearer)
+            return True
+        except OfficialClientError as exc:
+            logger.warning("Could not mark first PDF progress as READING: %s", type(exc).__name__)
+            return False
 
     @staticmethod
     def _timestamp_conflict(

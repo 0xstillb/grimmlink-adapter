@@ -99,6 +99,7 @@ async def test_md5_pdf_without_book_id_uses_native_route_without_bearer_projecti
     client = AsyncMock()
     client.update_koreader_progress.return_value = {"status": "progress updated"}
     client.update_book_progress.return_value = {}
+    client.get_app_book_progress.return_value = {"readStatus": "UNREAD"}
     service = ProgressService(client)
     with patch.object(
         ProgressService,
@@ -114,9 +115,10 @@ async def test_md5_pdf_without_book_id_uses_native_route_without_bearer_projecti
         )
 
     assert result["status"] == "progress updated"
-    assert result["projection"] == "koreader-native+official-app"
+    assert result["projection"] == "koreader-native+official-app+reading-status"
     resolve_book.assert_awaited_once_with(CREDS, "pdf-hash-missing-id", None)
     client.get_koreader_progress.assert_not_awaited()
+    client.update_read_status.assert_awaited_once_with(25, "READING", "verified-bearer")
     client.update_book_progress.assert_awaited_once_with(
         25, {"pdfProgress": {"page": 12, "percentage": pytest.approx(1.81)}}, "verified-bearer",
     )
