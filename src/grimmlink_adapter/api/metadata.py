@@ -1,7 +1,6 @@
 """Metadata synchronization routes (ratings, bookmarks, annotations)."""
 
-
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkMetadataBatchResponse,
@@ -22,7 +21,7 @@ async def sync_metadata(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> GrimmlinkMetadataSyncResponse:
     """Push metadata updates (ratings, bookmarks, annotations)."""
-    return await _metadata_service.sync_metadata(request)
+    return await _metadata_service.sync_metadata(request, creds=creds)
 
 
 @router.get("/metadata", response_model=GrimmlinkMetadataPullResponse)
@@ -34,9 +33,12 @@ async def pull_metadata(
     cursor: str | None = Query(None),
     limit: int | None = Query(None),
     type: str | None = Query(None),
+    device_id: str | None = Query(None, alias="deviceId"),
+    x_device_id: str | None = Header(None, alias="X-Device-Id"),
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> GrimmlinkMetadataPullResponse:
     """Pull metadata updates since a given cursor or timestamp."""
+    effective_device_id = device_id or x_device_id
     return await _metadata_service.pull_metadata(
         book_id=book_id,
         book_hash=book_hash,
@@ -45,6 +47,8 @@ async def pull_metadata(
         cursor=cursor,
         limit=limit,
         item_type=type,
+        device_id=effective_device_id,
+        creds=creds,
     )
 
 
@@ -54,4 +58,4 @@ async def sync_metadata_batch(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> GrimmlinkMetadataBatchResponse:
     """Push batch metadata updates."""
-    return await _metadata_service.sync_metadata_batch(request)
+    return await _metadata_service.sync_metadata_batch(request, creds=creds)

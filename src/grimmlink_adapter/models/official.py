@@ -145,3 +145,60 @@ class OfficialReadingSessionDTO(BaseModel):
     endProgress: float | None = None
     startPage: int | None = None
     endPage: int | None = None
+
+
+class OfficialBookmarkDTO(BaseModel):
+    """Official bookmark representation returned by /api/v1/bookmarks."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    bookId: int
+    cfi: str | None = None
+    pageNumber: int | None = None
+    title: str | None = None
+    notes: str | None = None
+    color: str | None = None
+    priority: int | None = 1
+    positionMs: int | None = None
+    trackIndex: int | None = None
+
+
+class OfficialCreateBookmarkRequest(BaseModel):
+    """Payload for POST /api/v1/bookmarks."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    bookId: int
+    cfi: str | None = None
+    pageNumber: int | None = None
+    title: str | None = None
+    notes: str | None = None
+    color: str | None = None
+    priority: int | None = 1
+    positionMs: int | None = None
+    trackIndex: int | None = None
+
+
+class OfficialUpdateBookmarkRequest(BaseModel):
+    """Payload for PUT /api/v1/bookmarks/{bookmarkId}."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    cfi: str | None = None
+    pageNumber: int | None = None
+    title: str | None = None
+    notes: str | None = None
+    color: str | None = None
+    priority: int | None = 1
+    positionMs: int | None = None
+    trackIndex: int | None = None
+
+
+class OfficialPersonalRatingRequest(BaseModel):
+    """Payload for PUT /api/v1/books/personal-rating."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    ids: list[int] = Field(default_factory=list)
+    rating: int = Field(ge=1, le=5)

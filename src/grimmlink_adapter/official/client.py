@@ -17,7 +17,7 @@ Invariants:
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -39,9 +39,17 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_BOOK_BY_ID,
     OFFICIAL_BOOK_DOWNLOAD,
     OFFICIAL_BOOK_METADATA,
+    OFFICIAL_BOOK_PROGRESS,
     OFFICIAL_BOOK_SIDECAR_IMPORT,
+    OFFICIAL_BOOKMARK_BY_ID,
+    OFFICIAL_BOOKMARKS,
+    OFFICIAL_BOOKMARKS_BOOK,
+    OFFICIAL_BOOKS_PERSONAL_RATING,
+    OFFICIAL_BOOKS_RESET_PERSONAL_RATING,
+    OFFICIAL_BOOKS_STATUS,
     OFFICIAL_HEALTHCHECK,
     OFFICIAL_KOREADER_AUTH,
+    OFFICIAL_KOREADER_PROGRESS,
     OFFICIAL_KOREADER_PROGRESS_HASH,
     OFFICIAL_MAGIC_SHELF_BOOKS,
     OFFICIAL_MAGIC_SHELVES,
@@ -809,6 +817,108 @@ class OfficialGrimmoryClient:
             )
         return self._parse_json(resp, "GET", url)
 
+    async def update_koreader_progress(
+        self, payload: dict[str, Any], username: str, md5_key: str,
+    ) -> dict[str, Any]:
+        """Write a KOReader progress payload using Official's MD5 route.
+
+        Official stores ``percentage`` as a 0..1 fraction.  Callers must
+        normalize that field before invoking this transport method.
+        """
+        self.set_koreader_credentials(username, md5_key)
+        resp = await self.request(
+            "PUT", OFFICIAL_KOREADER_PROGRESS, auth_mode=AuthMode.KOREADER, json=payload,
+        )
+        if resp.status_code not in (200, 201, 202, 204):
+            raise OfficialBadResponseError(
+                f"Failed to update progress: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="PUT",
+                url=OFFICIAL_KOREADER_PROGRESS,
+                response_body=resp.text,
+            )
+        if resp.status_code == 204 or not resp.content:
+            return {}
+        return self._parse_json(resp, "PUT", OFFICIAL_KOREADER_PROGRESS)
+
+    async def get_app_book_progress(self, book_id: int, bearer_token: str) -> dict[str, Any]:
+        """Fetch the authenticated WebUI/app progress projection for a book."""
+        url = OFFICIAL_BOOK_PROGRESS.format(bookId=book_id)
+        resp = await self._send_request(
+            method="GET", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized access to book progress", status_code=resp.status_code,
+                method="GET", url=url, response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch book progress: HTTP {resp.status_code}",
+                status_code=resp.status_code, method="GET", url=url,
+                response_body=resp.text,
+            )
+        return self._parse_json(resp, "GET", url)
+
+    async def update_book_progress(
+        self, book_id: int, payload: dict[str, Any], bearer_token: str,
+    ) -> dict[str, Any]:
+        """Write the WebUI/app projection using Official's JWT endpoint."""
+        url = OFFICIAL_BOOK_PROGRESS.format(bookId=book_id)
+        resp = await self._send_request(
+            method="PUT", path=url, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"}, json=payload,
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized update of book progress", status_code=resp.status_code,
+                method="PUT", url=url, response_body=resp.text,
+            )
+        if resp.status_code not in (200, 201, 202, 204):
+            raise OfficialBadResponseError(
+                f"Failed to update book progress: HTTP {resp.status_code}",
+                status_code=resp.status_code, method="PUT", url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code == 204 or not resp.content:
+            return {}
+        return self._parse_json(resp, "PUT", url)
+
+    async def update_read_status(
+        self, book_id: int, read_status: str, bearer_token: str,
+    ) -> list[dict[str, Any]]:
+        """Set a manual read status through Official's JWT endpoint."""
+        resp = await self._send_request(
+            method="POST", path=OFFICIAL_BOOKS_STATUS, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json={"bookIds": [book_id], "status": read_status},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized read-status update", status_code=resp.status_code,
+                method="POST", url=OFFICIAL_BOOKS_STATUS, response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to update read status: HTTP {resp.status_code}",
+                status_code=resp.status_code, method="POST", url=OFFICIAL_BOOKS_STATUS,
+                response_body=resp.text,
+            )
+        try:
+            data = resp.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise OfficialBadResponseError(
+                "Read-status response was not valid JSON", status_code=resp.status_code,
+                method="POST", url=OFFICIAL_BOOKS_STATUS, response_body=resp.text,
+            ) from exc
+        if not isinstance(data, list):
+            raise OfficialBadResponseError(
+                "Read-status response was not a list", status_code=resp.status_code,
+                method="POST", url=OFFICIAL_BOOKS_STATUS, response_body=resp.text,
+            )
+        return [item for item in data if isinstance(item, dict)]
+
     async def get_book_by_id(self, book_id: int, bearer_token: str) -> dict[str, Any]:
         """Fetch book metadata by Official book ID."""
         url = OFFICIAL_BOOK_BY_ID.format(bookId=book_id)
@@ -1087,3 +1197,252 @@ class OfficialGrimmoryClient:
                 url=url,
             )
         return resp
+
+    async def update_personal_rating(
+        self, book_id: int, rating: int, bearer_token: str,
+    ) -> dict[str, Any]:
+        """Update personal rating (1-5) on Official Grimmory."""
+        resp = await self._send_request(
+            method="PUT",
+            path=OFFICIAL_BOOKS_PERSONAL_RATING,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json={"ids": [book_id], "rating": rating},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized personal rating update",
+                status_code=resp.status_code,
+                method="PUT",
+                url=OFFICIAL_BOOKS_PERSONAL_RATING,
+                response_body=resp.text,
+            )
+        if resp.status_code not in (200, 204):
+            raise OfficialBadResponseError(
+                f"Failed to update personal rating: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="PUT",
+                url=OFFICIAL_BOOKS_PERSONAL_RATING,
+                response_body=resp.text,
+            )
+        if not resp.content:
+            return {}
+        try:
+            return cast(dict[str, Any], resp.json())
+        except (ValueError, json.JSONDecodeError):
+            return {}
+
+    async def reset_personal_rating(
+        self, book_id: int, bearer_token: str,
+    ) -> None:
+        """Reset personal rating for a book on Official Grimmory."""
+        resp = await self._send_request(
+            method="POST",
+            path=OFFICIAL_BOOKS_RESET_PERSONAL_RATING,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json=[book_id],
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized personal rating reset",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_BOOKS_RESET_PERSONAL_RATING,
+                response_body=resp.text,
+            )
+        if resp.status_code not in (200, 204):
+            raise OfficialBadResponseError(
+                f"Failed to reset personal rating: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_BOOKS_RESET_PERSONAL_RATING,
+                response_body=resp.text,
+            )
+
+    async def get_personal_rating(
+        self, book_id: int, bearer_token: str,
+    ) -> int | None:
+        """Fetch personal rating for a book from Official Grimmory."""
+        book_data = await self.get_book_by_id(book_id, bearer_token)
+        rating = book_data.get("personalRating")
+        return int(rating) if rating is not None else None
+
+    async def get_bookmarks_for_book(
+        self, book_id: int, bearer_token: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch all bookmarks for a book from Official Grimmory."""
+        url = OFFICIAL_BOOKMARKS_BOOK.format(bookId=book_id)
+        resp = await self._send_request(
+            method="GET",
+            path=url,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized access to bookmarks",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch bookmarks: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        try:
+            data = resp.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise OfficialBadResponseError(
+                "Bookmarks response was not valid JSON",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            ) from exc
+        if not isinstance(data, list):
+            raise OfficialBadResponseError(
+                "Bookmarks response was not a list",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        return [item for item in data if isinstance(item, dict)]
+
+    async def get_bookmark(
+        self, bookmark_id: int, bearer_token: str,
+    ) -> dict[str, Any]:
+        """Fetch a single bookmark by ID from Official Grimmory."""
+        url = OFFICIAL_BOOKMARK_BY_ID.format(bookmarkId=bookmark_id)
+        resp = await self._send_request(
+            method="GET",
+            path=url,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized access to bookmark",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code == 404:
+            raise OfficialClientError(
+                f"Bookmark {bookmark_id} not found",
+                status_code=404,
+                method="GET",
+                url=url,
+            )
+        if resp.status_code != 200:
+            raise OfficialBadResponseError(
+                f"Failed to fetch bookmark: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        return self._parse_json(resp, "GET", url)
+
+    async def create_bookmark(
+        self, payload: dict[str, Any], bearer_token: str,
+    ) -> dict[str, Any]:
+        """Create a bookmark on Official Grimmory."""
+        resp = await self._send_request(
+            method="POST",
+            path=OFFICIAL_BOOKMARKS,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json=payload,
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized bookmark creation",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_BOOKMARKS,
+                response_body=resp.text,
+            )
+        if resp.status_code not in (200, 201):
+            raise OfficialBadResponseError(
+                f"Failed to create bookmark: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="POST",
+                url=OFFICIAL_BOOKMARKS,
+                response_body=resp.text,
+            )
+        return self._parse_json(resp, "POST", OFFICIAL_BOOKMARKS)
+
+    async def update_bookmark(
+        self, bookmark_id: int, payload: dict[str, Any], bearer_token: str,
+    ) -> dict[str, Any]:
+        """Update a bookmark on Official Grimmory."""
+        url = OFFICIAL_BOOKMARK_BY_ID.format(bookmarkId=bookmark_id)
+        resp = await self._send_request(
+            method="PUT",
+            path=url,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json=payload,
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized bookmark update",
+                status_code=resp.status_code,
+                method="PUT",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code not in (200, 204):
+            raise OfficialBadResponseError(
+                f"Failed to update bookmark: HTTP {resp.status_code}",
+                status_code=resp.status_code,
+                method="PUT",
+                url=url,
+                response_body=resp.text,
+            )
+        if not resp.content:
+            return {}
+        try:
+            return cast(dict[str, Any], resp.json())
+        except (ValueError, json.JSONDecodeError):
+            return {}
+
+    async def delete_bookmark(
+        self, bookmark_id: int, bearer_token: str,
+    ) -> bool:
+        """Delete a bookmark from Official Grimmory.
+
+        Returns True on successful deletion or if the bookmark is already gone (404).
+        """
+        url = OFFICIAL_BOOKMARK_BY_ID.format(bookmarkId=bookmark_id)
+        resp = await self._send_request(
+            method="DELETE",
+            path=url,
+            auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+        )
+        if resp.status_code in (401, 403):
+            raise OfficialPermissionError(
+                "Unauthorized bookmark deletion",
+                status_code=resp.status_code,
+                method="DELETE",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code in (200, 204, 404):
+            return True
+        raise OfficialBadResponseError(
+            f"Failed to delete bookmark: HTTP {resp.status_code}",
+            status_code=resp.status_code,
+            method="DELETE",
+            url=url,
+            response_body=resp.text,
+        )

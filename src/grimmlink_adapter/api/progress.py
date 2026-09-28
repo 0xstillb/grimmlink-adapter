@@ -16,14 +16,13 @@ async def get_progress(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> KoreaderProgressPayload:
     """Retrieve reading progress for a given book hash."""
-    return await _progress_service.get_progress(book_hash)
+    return await _progress_service.get_progress(book_hash, creds)
 
 
 @router.put("/progress")
 async def update_progress(
     progress: KoreaderProgressPayload,
     creds: ClientCredentials = Depends(require_client_credentials),
-) -> dict[str, str]:
+) -> dict[str, object]:
     """Submit updated reading progress."""
-    await _progress_service.update_progress(progress)
-    return {"status": "progress updated"}
+    return await _progress_service.update_progress(progress, creds)

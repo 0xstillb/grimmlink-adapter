@@ -19,7 +19,7 @@ class VerifiedBearer(str):
         return instance
 
 
-async def get_official_bearer(creds: ClientCredentials) -> str:
+async def get_official_bearer(creds: ClientCredentials) -> VerifiedBearer:
     """Verify incoming identities and use a linked JWT for MD5-only requests."""
     from grimmlink_adapter.config import settings
 

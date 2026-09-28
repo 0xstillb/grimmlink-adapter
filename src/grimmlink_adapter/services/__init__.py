@@ -6,6 +6,12 @@ from grimmlink_adapter.services.metadata_service import MetadataService, normali
 from grimmlink_adapter.services.progress_service import (
     ProgressService,
     calculate_display_percentage,
+    grimmlink_percent_to_official_fraction,
+    normalize_grimmlink_percent,
+    official_fraction_to_display_percent,
+    snapshot_from_grimmlink,
+    snapshot_from_official,
+    snapshot_to_grimmlink,
 )
 from grimmlink_adapter.services.session_service import (
     SessionService,
@@ -21,6 +27,12 @@ __all__ = [
     "SessionService",
     "ShelfService",
     "calculate_display_percentage",
+    "grimmlink_percent_to_official_fraction",
     "generate_session_idempotency_key",
+    "normalize_grimmlink_percent",
+    "official_fraction_to_display_percent",
     "normalize_rating",
+    "snapshot_from_grimmlink",
+    "snapshot_from_official",
+    "snapshot_to_grimmlink",
 ]

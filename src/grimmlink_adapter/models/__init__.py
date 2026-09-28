@@ -35,6 +35,7 @@ from grimmlink_adapter.models.internal import (
     CachedToken,
     NormalizedProgress,
     OutboxAction,
+    ProgressSnapshot,
 )
 from grimmlink_adapter.models.official import (
     OfficialAppBookSummaryDTO,
@@ -81,6 +82,7 @@ __all__ = [
     "CachedToken",
     "NormalizedProgress",
     "OutboxAction",
+    "ProgressSnapshot",
     "OfficialBookDTO",
     "OfficialAppBookSummaryDTO",
     "OfficialBookFileDTO",

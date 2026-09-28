@@ -6,14 +6,14 @@ from grimmlink_adapter.models.grimmlink import GrimmlinkCapabilitiesResponse
 
 router = APIRouter(tags=["Capabilities"])
 
-# Capabilities enabled as read paths become operational; mutation flags stay disabled.
+# Progress normalization and the Official KOReader bridge are operational.
 _STATIC_CAPABILITIES = GrimmlinkCapabilitiesResponse(
     apiVersion="v1",
-    webUiProgress=False,
-    progressSync=False,
-    pdfBridge=False,
+    webUiProgress=True,
+    progressSync=True,
+    pdfBridge=True,
     readingSessions=False,
-    metadataSync=False,
+    metadataSync=True,
     shelves=True,
 )
 

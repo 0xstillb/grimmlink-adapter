@@ -119,6 +119,43 @@ async def test_assign_shelves_preserves_forbidden_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_progress_and_manual_status_use_official_schemas() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer verified"
+        if request.method == "GET":
+            assert request.url.path == "/api/v1/app/books/42/progress"
+            return httpx.Response(200, json={
+                "readProgress": 22.0,
+                "pdfProgress": {"page": 55, "percentage": 22.0},
+                "lastReadTime": "2026-09-27T12:00:00Z",
+            })
+        if request.url.path == "/api/v1/app/books/42/progress":
+            assert request.method == "PUT"
+            assert json.loads(request.read()) == {
+                "pdfProgress": {"page": 55, "percentage": 22.0},
+            }
+            return httpx.Response(200)
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/books/status"
+        assert json.loads(request.read()) == {"bookIds": [42], "status": "READ"}
+        return httpx.Response(200, json=[{
+            "bookId": 42,
+            "readStatus": "READ",
+            "readStatusModifiedTime": "2026-09-27T12:00:00Z",
+        }])
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    client = OfficialGrimmoryClient(client=mock_client)
+    progress = await client.get_app_book_progress(42, "verified")
+    assert progress["pdfProgress"]["page"] == 55
+    assert await client.update_book_progress(
+        42, {"pdfProgress": {"page": 55, "percentage": 22.0}}, "verified",
+    ) == {}
+    statuses = await client.update_read_status(42, "READ", "verified")
+    assert statuses[0]["readStatus"] == "READ"
+
+
+@pytest.mark.asyncio
 async def test_login_invalid_credentials_401() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"error": "Bad credentials"})
@@ -813,3 +850,72 @@ async def test_client_async_context_manager() -> None:
         internal_c = client._get_client()
         assert not internal_c.is_closed
     assert internal_c.is_closed
+
+
+# -----------------------------------------------------------------------------
+# 11. Official Bookmark & Rating Client Methods
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_official_rating_methods() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "Authorization" in request.headers
+        assert request.headers["Authorization"] == "Bearer mock_token"
+        if request.method == "PUT" and request.url.path == "/api/v1/books/personal-rating":
+            data = json.loads(request.content)
+            assert data["ids"] == [42]
+            assert data["rating"] == 4
+            return httpx.Response(200, json={"status": "ok"})
+        elif request.method == "POST" and request.url.path == "/api/v1/books/reset-personal-rating":
+            data = json.loads(request.content)
+            assert data == [42]
+            return httpx.Response(200)
+        elif request.method == "GET" and request.url.path == "/api/v1/books/42":
+            return httpx.Response(200, json={"id": 42, "personalRating": 4})
+        return httpx.Response(404)
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://localhost:8080")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    await client.update_personal_rating(42, 4, "mock_token")
+    await client.reset_personal_rating(42, "mock_token")
+    rating = await client.get_personal_rating(42, "mock_token")
+    assert rating == 4
+
+
+@pytest.mark.asyncio
+async def test_official_bookmark_methods() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer mock_token"
+        if request.method == "GET" and request.url.path == "/api/v1/bookmarks/book/42":
+            return httpx.Response(200, json=[{"id": 101, "bookId": 42, "title": "BM 1"}])
+        elif request.method == "GET" and request.url.path == "/api/v1/bookmarks/101":
+            return httpx.Response(200, json={"id": 101, "bookId": 42, "title": "BM 1"})
+        elif request.method == "POST" and request.url.path == "/api/v1/bookmarks":
+            data = json.loads(request.content)
+            return httpx.Response(201, json={"id": 102, **data})
+        elif request.method == "PUT" and request.url.path == "/api/v1/bookmarks/102":
+            return httpx.Response(200, json={"id": 102, "title": "Updated"})
+        elif request.method == "DELETE" and request.url.path == "/api/v1/bookmarks/102":
+            return httpx.Response(204)
+        return httpx.Response(404)
+
+    mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://localhost:8080")
+    client = OfficialGrimmoryClient(client=mock_client)
+
+    bms = await client.get_bookmarks_for_book(42, "mock_token")
+    assert len(bms) == 1
+    assert bms[0]["id"] == 101
+
+    bm = await client.get_bookmark(101, "mock_token")
+    assert bm["title"] == "BM 1"
+
+    created = await client.create_bookmark({"bookId": 42, "title": "BM 2"}, "mock_token")
+    assert created["id"] == 102
+
+    updated = await client.update_bookmark(102, {"title": "Updated"}, "mock_token")
+    assert updated.get("title") == "Updated"
+
+    deleted = await client.delete_bookmark(102, "mock_token")
+    assert deleted is True

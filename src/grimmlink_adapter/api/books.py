@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 import httpx
@@ -19,7 +20,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from grimmlink_adapter.models.grimmlink import GrimmlinkReadStatusRequest
+from grimmlink_adapter.models.grimmlink import (
+    GrimmlinkReadStatusRequest,
+    GrimmlinkReadStatusResponse,
+)
 from grimmlink_adapter.models.official import OfficialBookDTO
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import (
@@ -42,7 +46,10 @@ from grimmlink_adapter.services.book_service import (
     _book_contains_file,
 )
 from grimmlink_adapter.services.linked_auth import LinkedAuthUnavailable, get_linked_bearer
+from grimmlink_adapter.services.progress_service import ProgressService, _parse_timestamp
 from grimmlink_adapter.services.request_auth import get_official_bearer
+from grimmlink_adapter.state.book_identity import BookIdentityStore
+from grimmlink_adapter.state.cache import ProgressStateCache
 
 logger = logging.getLogger(__name__)
 
@@ -290,11 +297,8 @@ async def download_book(
 async def get_supported_read_statuses(
     creds: ClientCredentials = Depends(require_client_credentials),
 ) -> dict[str, list[str]]:
-    """Reject status discovery until Official status support is verified."""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Read-status discovery is unavailable until Official status mapping is implemented.",
-    )
+    """Return the status values accepted by the Official status endpoint."""
+    return {"statuses": ["UNREAD", "READING", "RE_READING", "READ", "PARTIALLY_READ", "PAUSED", "WONT_READ", "ABANDONED"]}
 
 
 @router.put("/{book_id}/status")
@@ -302,9 +306,53 @@ async def update_read_status(
     book_id: int,
     request: GrimmlinkReadStatusRequest | None = None,
     creds: ClientCredentials = Depends(require_client_credentials),
-) -> None:
-    """Reject read-status changes until the Official mutation is implemented."""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Read-status updates are unavailable until the Official mutation is implemented.",
+) -> GrimmlinkReadStatusResponse:
+    """Update Official status and persist its authoritative manual timestamp."""
+    if request is None or not request.status or not request.status.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="status is required")
+    status_value = request.status.strip().upper()
+    if status_value == "COMPLETED":
+        status_value = "READ"
+    allowed = {"UNREAD", "READING", "RE_READING", "READ", "PARTIALLY_READ", "PAUSED", "WONT_READ", "ABANDONED"}
+    if status_value not in allowed:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported read status")
+
+    bearer = await get_official_bearer(creds)
+    client = OfficialGrimmoryClient()
+    try:
+        result = await client.update_read_status(book_id, status_value, bearer)
+    except OfficialPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Book status update was denied by Official Grimmory.") from exc
+    except OfficialAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Upstream authentication failed.") from exc
+    except OfficialClientError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Official read-status service is unavailable.") from exc
+    finally:
+        await client.aclose()
+
+    item = next((entry for entry in result if entry.get("bookId") == book_id), result[0] if result else {})
+    raw_time = item.get("readStatusModifiedTime") or item.get("updatedAt")
+    epoch, _ = _parse_timestamp(raw_time)
+    timestamp_epoch = epoch or int(datetime.now(UTC).timestamp())
+    owner_key = (
+        f"user:{getattr(bearer, 'user_id', '')}"
+        if creds.bearer_token else ProgressService._owner_key(creds)
     )
+    await ProgressStateCache.set_manual_status_for_book(owner_key, book_id, status_value, timestamp_epoch)
+    # Also materialize hash markers for already verified mappings so legacy
+    # progress payloads without bookId still honor this manual status.
+    if getattr(bearer, "user_id", None) is not None:
+        from grimmlink_adapter.config import settings
+
+        rows = await BookIdentityStore.lookup_by_book_id(
+            settings.GRIMMORY_BASE_URL.rstrip("/"), str(bearer.user_id), book_id,
+        )
+        seen_hashes: set[str] = set()
+        for row in rows:
+            for book_hash in (row.current_hash, row.initial_hash):
+                if book_hash and book_hash not in seen_hashes:
+                    seen_hashes.add(book_hash)
+                    await ProgressStateCache.set_manual_status(
+                        owner_key, book_hash, status_value, timestamp_epoch,
+                    )
+    return GrimmlinkReadStatusResponse(bookId=book_id, status=status_value, updated=True)

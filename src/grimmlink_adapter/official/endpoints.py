@@ -19,6 +19,9 @@ OFFICIAL_BOOKS_PAGE = "/api/v1/books/page"
 OFFICIAL_BOOKS_APP = "/api/v1/app/books"
 OFFICIAL_BOOKS_APP_SEARCH = "/api/v1/app/books/search"
 OFFICIAL_BOOK_BY_ID = "/api/v1/books/{bookId}"
+OFFICIAL_BOOK_PROGRESS = "/api/v1/app/books/{bookId}/progress"
+OFFICIAL_BOOKS_PROGRESS = "/api/v1/books/progress"
+OFFICIAL_BOOKS_STATUS = "/api/v1/books/status"
 OFFICIAL_BOOK_DOWNLOAD = "/api/v1/books/{bookId}/download"
 OFFICIAL_BOOK_METADATA = "/api/v1/books/{bookId}/metadata"
 OFFICIAL_BOOK_SIDECAR_IMPORT = "/api/v1/books/{bookId}/sidecar/import"
@@ -32,8 +35,11 @@ OFFICIAL_SHELVES_ASSIGN = "/api/v1/books/shelves"
 
 # Bookmarks, Annotations & Rating
 OFFICIAL_BOOKMARKS = "/api/v1/bookmarks"
+OFFICIAL_BOOKMARKS_BOOK = "/api/v1/bookmarks/book/{bookId}"
 OFFICIAL_BOOKMARK_BY_ID = "/api/v1/bookmarks/{bookmarkId}"
 OFFICIAL_RATINGS = "/api/v1/ratings"
+OFFICIAL_BOOKS_PERSONAL_RATING = "/api/v1/books/personal-rating"
+OFFICIAL_BOOKS_RESET_PERSONAL_RATING = "/api/v1/books/reset-personal-rating"
 
 # Reading Sessions
 OFFICIAL_READING_SESSIONS = "/api/v1/reading-sessions"

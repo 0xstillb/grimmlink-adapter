@@ -1,9 +1,9 @@
 # Inter-Session Handoff & Governance
 
-- **Current Session:** Session 04 — Shelf Read Sync
-- **Implementer:** Codex implementation complete; Sol Shelf Review approved
-- **Current Lifecycle State:** Session 04 gate passed on the unmerged working tree
-- **Timestamp:** 2026-09-27
+- **Current Session:** Session 07 — Rating + Bookmark + Annotation + Cursor/Dedupe
+- **Implementer:** Gemini Flash 3.8 implementation plus Sol gate remediation complete
+- **Current Lifecycle State:** Session 07 gate passed on the unmerged working tree
+- **Timestamp:** 2026-09-28
 
 ---
 
@@ -288,3 +288,108 @@ managed-file state by verified Official user identity; cleanup remains opt-in
 and requires the explicit managed-copy registration hook.
 
 ---
+
+## 9. Session 06 — EPUB/PDF Progress and WebUI Bridge
+
+The adapter now exposes the frozen progress routes and advertises progress,
+WebUI progress, and PDF bridge capability. GrimmLink wire percentages remain
+explicit 0..100 display values; Official KOReader percentages are converted at
+the boundary to and from 0..1 fractions. A canonical `ProgressSnapshot` keeps
+the two units named separately.
+
+Reflowable formats use the native KOReader location (`location` first, then
+`progress`) as the authoritative position. Numeric-only locations are rejected
+for EPUB-like formats. When trustworthy page data exists, the display percent
+is derived as `currentPage / totalPages * 100`; for example, 55/16653 is about
+0.33%, not 33%. PDF and other fixed-page formats preserve page fields and use
+the same percentage projection.
+
+Progress writes perform an upstream read before mutation. Older timestamps and
+an unexpected `expectedUpdatedAt` return an explicit conflict without writing;
+`force=true` overrides only the remote-progress timestamp check. A newer manual
+status always wins, including forced replay. A scoped SQLite progress cache
+(migration 008) stores the last normalized snapshot; `manual_status_state` and
+the per-hash marker retain authoritative WebUI status timestamps.
+
+Bearer writes perform the same app-progress timestamp preflight and use stable
+verified user identity for cache scope, so token rotation cannot bypass manual
+status precedence. App/WebUI percentages are parsed as display units even when
+below 1%; the scoped canonical snapshot supplies PDF total pages when the app
+response omits them. XPointer values are never labelled as EPUB CFI: MD5
+reflowable writes remain on Official's KOReader conversion path, while Bearer
+app writes require a real `epubcfi(...)` location.
+
+Bearer requests use verified server/user-scoped hash mappings and Official's
+app progress endpoint. PDF writes send the real `pdfProgress` page/percentage
+schema and EPUB writes send `epubProgress`; MD5 requests continue to use the
+KOReader endpoint and mirror through the JWT projection when a linked session
+is available. Manual status writes use Official `POST /api/v1/books/status`
+and persist the returned `readStatusModifiedTime` before returning success.
+Fixed-page MD5 writes require a verified book mapping and use the Official app
+PDF write as the single authoritative mutation; an unmapped PDF fails before
+any KOReader write, and an app-write failure remains retryable without a
+partially advanced KOReader timestamp.
+
+Verification on 2026-09-27:
+
+- `.venv\\Scripts\\ruff.exe check src tests` — all checks passed.
+- `.venv\\Scripts\\mypy.exe src` — no issues in 48 source files.
+- `.venv\\Scripts\\python.exe -m pytest -q --basetemp .pytest-tmp-session06-final7` — 239 passed.
+- `git diff --check` — passed (Git reported expected LF-to-CRLF notices).
+
+Session 06 remains unmerged after the required Sol deep progress review.
+Sol APPROVE was received on 2026-09-27 with no remaining safety blockers.
+No production Official progress mutation or WebUI canary was run.
+
+---
+
+## 10. Session 07 — Rating + Bookmark + Annotation + Cursor/Dedupe
+
+The adapter now replaces the fork metadata batch routes (`POST /api/grimmlink/v1/syncs/metadata`,
+`POST /api/grimmlink/v1/syncs/metadata/batch`, and `GET /api/grimmlink/v1/syncs/metadata`)
+with Official Grimmory API adapters while preserving full deduplication, client device tracking,
+scoped cursors, conversion drift prevention, and delete safety.
+
+### 10.1 Field Mapping Table
+
+| Entity | Legacy GrimmLink Field | Internal Normalized Field | Official Grimmory API / Field | Loss Policy & Integrity Invariants |
+| :--- | :--- | :--- | :--- | :--- |
+| **Rating** | `rating` (1–10 float/int) | `NormalizedRating.rating_value` | `PUT /api/v1/books/personal-rating` (`rating: 1..5`) | Mapped via `(val + 1) // 2`. Original 1–10 value and source scale recorded in `metadata_applied_history`. Conversion drift prevented on pull by looking up exact source value when `official_value` matches. External WebUI ratings map to even integers (`val * 2`). |
+| **Rating** | `val <= 0`, `deleted=True`, or `reset=True` | `NormalizedRating.is_reset = True` | `POST /api/v1/books/reset-personal-rating` | Explicit reset upstream. Clears user rating without ambiguity. |
+| **Rating** | `review` | `NormalizedRating.review` | N/A | Preserved in adapter SQLite `metadata_applied_history` payload. Dropped upstream as Official Grimmory has no separate review field on personal rating. |
+| **Bookmark** | `id` / `bookmark_id` / `dedupeKey` | `NormalizedBookmark.local_id` | `GET /api/v1/bookmarks/book/{id}` | Bi-directional mapping maintained in `metadata_remote_mappings` `(server, user, book, type, local_id, official_id)`. |
+| **Bookmark** | `title` | `NormalizedBookmark.title` | `OfficialBookmarkDTO.title` | Directly mapped upstream (string). |
+| **Bookmark** | `notes` / `text` | `NormalizedBookmark.notes` | `OfficialBookmarkDTO.notes` | Directly mapped upstream (string). |
+| **Bookmark** | `page` | `NormalizedBookmark.page_number` | `OfficialBookmarkDTO.pageNumber` | Directly mapped upstream (integer). |
+| **Bookmark** | `location.cfi` | `NormalizedBookmark.cfi` | `OfficialBookmarkDTO.cfi` | Mapped only if valid CFI (`epubcfi(...)`). |
+| **Bookmark** | `deleted: True` | `NormalizedBookmark.deleted = True` | `DELETE /api/v1/bookmarks/{id}` | **Delete Invariant:** Local mapping is deleted ONLY after confirmed upstream success (HTTP 200, 204, or 404). Network/5xx keep mapping intact for outbox retry. |
+| **Annotation** | `id` / `annotation_id` / `dedupeKey` | `NormalizedAnnotation.local_id` | `OfficialBookmarkDTO.id` | Mapped to Official Bookmarks with bi-directional ID tracking in `metadata_remote_mappings`. |
+| **Annotation** | `text` | `NormalizedAnnotation.text` | `OfficialBookmarkDTO.title` | Highlighted text mapped to Official bookmark `title`. |
+| **Annotation** | `note` | `NormalizedAnnotation.note` | `OfficialBookmarkDTO.notes` | User note mapped to Official bookmark `notes`. |
+| **Annotation** | `color` | `NormalizedAnnotation.color` | `OfficialBookmarkDTO.color` | Directly mapped upstream (string hex/name). |
+| **Annotation** | `page` | `NormalizedAnnotation.page_number` | `OfficialBookmarkDTO.pageNumber` | Directly mapped upstream (integer). |
+| **Annotation** | `location.cfi` | `NormalizedAnnotation.cfi` | `OfficialBookmarkDTO.cfi` | Mapped only if valid CFI (`epubcfi(...)`). |
+| **Annotation** | `pos0` / `pos1` (XPointer) | `NormalizedAnnotation.pos0`, `pos1` | N/A (**Never injected into `cfi`**) | **Location Integrity Invariant:** Raw XPointer coordinates are strictly isolated and preserved in adapter SQLite `metadata_applied_history.payload_json`. Never injected into Official `cfi`, preventing reader location corruption. |
+| **Annotation** | `drawer`, `style`, `chapter` | `NormalizedAnnotation.*` | N/A | Unsupported upstream; preserved losslessly in adapter SQLite `metadata_applied_history.payload_json` and included in dedupe hashes so unsupported-only edits are retained. |
+| **Dedupe** | `dedupeKey` / `contentHash` | `MetadataDedupeRecord.content_hash` | N/A | Deterministic SHA-256 hash computed across canonical item fields. Duplicate items receive `status: DUPLICATE` without re-invoking upstream mutation. |
+| **Dedupe** | `deviceId` | `MetadataDedupeRecord.device_id` | N/A | Preserved in `metadata_applied_history`. On metadata pull, items authored by the requesting device are skipped to eliminate KOReader sync echo loops. |
+| **Cursor** | `since` / `cursor` | `scoped_metadata_cursors.cursor` | N/A | **Scoped Cursor Invariant:** Cursors are strictly keyed by the 5-tuple `(server, user, book, file, type)`. Opaque continuation cursors retain the snapshot cutoff plus offset, reject cross-scope reuse, and do not advance the final timestamp until the page is exhausted. |
+| **Outbox** | Mutation action | `OutboxAction` | Upstream mutation | Every production rating/bookmark/annotation mutation is persisted before dispatch and executed through `IdempotencyManager`. **Timeout-after-commit mitigation:** retried bookmark creates probe Official before re-creating and adopt the confirmed upstream ID. |
+
+Mapped bookmark and annotation pulls merge current Official title/notes/color/page/CFI fields with locally preserved unsupported fields. Confirmed records missing from a complete Official bookmark snapshot are returned as explicit deletion tombstones. Unmapped delete requests return `FAILED`; they are never reported as successful without an upstream confirmation.
+
+Rating reset is explicit: `reset=true`, `deleted=true`, or a non-positive value invokes Official reset. A rating object without a value or explicit reset is rejected rather than being interpreted as deletion. Reviews are retained in applied history and restored on pull.
+
+### 10.2 Verification Evidence
+
+- `.venv\Scripts\ruff.exe check src tests` — all checks passed.
+- `.venv\Scripts\mypy.exe src` — no issues in 48 source files.
+- `.venv\Scripts\python.exe -m pytest -q --basetemp .codex-tmp\sol-session07-fixed-final3` — **259 passed in 20.66s**.
+- `git diff --check` — passed cleanly with no trailing whitespace or syntax errors.
+
+### 10.3 Execution Rule & Governance Status
+
+- **Implementer:** Gemini Flash 3.8 completed the initial implementation; Sol remediation expanded verification to 19 dedicated metadata tests plus 240 regression tests and updated this handoff.
+- **Rule:** Gemini must inspect, implement, test, and update `docs/HANDOFF.md`, then **STOP before merge**.
+- **Sol remediation:** Fixed production outbox integration, timeout recovery, lossless cursor continuation, explicit rating reset validation, unsupported-field dedupe, unmapped deletion reporting, fresh Official-field reconciliation, remote deletion tombstones, and capability advertisement. Added seven focused regression tests covering those paths.
+- **Current Status:** Session 07 implementation and focused remediation are complete. Sol re-review is `APPROVE`; the working tree remains unmerged.

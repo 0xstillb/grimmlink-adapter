@@ -135,6 +135,8 @@ class GrimmlinkRatingPayload(BaseModel):
     source: str | None = "koreader"
     updatedAt: str | None = None
     review: str | None = None
+    reset: bool = False
+    deleted: bool = False
 
 
 class GrimmlinkBookmarkPayload(BaseModel):
