@@ -439,6 +439,14 @@ class ProgressService:
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
             snapshot = snapshot_from_official(raw, book_hash)
+            prior = await ProgressStateCache.get(owner_key, book_hash)
+            if snapshot is not None and prior is not None:
+                # Official's stock native DTO omits the fork's identity/format
+                # fields. Restore only the verified local metadata; never use
+                # the cache to replace the remote native location.
+                snapshot.book_id = snapshot.book_id or prior.book_id
+                snapshot.book_file_id = snapshot.book_file_id or prior.book_file_id
+                snapshot.format = snapshot.format or prior.format
         if snapshot is None or (snapshot.display_percent is None and snapshot.native_location is None):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No progress found for book hash.")
         await ProgressStateCache.put(owner_key, snapshot)

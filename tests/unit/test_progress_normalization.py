@@ -77,6 +77,27 @@ async def test_progress_get_maps_official_fraction_and_preserves_native_location
 
 
 @pytest.mark.asyncio
+async def test_native_pull_restores_verified_format_without_replacing_remote_location() -> None:
+    client = AsyncMock()
+    client.get_koreader_progress.return_value = {
+        "document": "epub-hash",
+        "progress": "/body/7",
+        "percentage": 0.42,
+        "timestamp": 200,
+    }
+    prior = ProgressSnapshot(
+        book_hash="epub-hash", book_id=28, book_file_id=28, format="EPUB",
+        native_location="/body/3", display_percent=30.0, official_fraction=0.3,
+    )
+    with patch.object(ProgressStateCache, "get", new=AsyncMock(return_value=prior)):
+        result = await ProgressService(client).get_progress("epub-hash", CREDS)
+    assert result.fileFormat == "EPUB"
+    assert result.bookId == 28
+    assert result.progress == "/body/7"
+    assert result.location == "/body/7"
+
+
+@pytest.mark.asyncio
 async def test_progress_put_converts_percent_to_official_fraction() -> None:
     client = AsyncMock()
     client.get_koreader_progress.return_value = {}
