@@ -24,6 +24,10 @@ class Settings(BaseSettings):
         default="http://localhost:6060",
         description="Base URL of unmodified Official Grimmory server",
     )
+    GRIMMLINK_NATIVE_PROXY: bool = Field(
+        default=False,
+        description="Proxy MD5 GrimmLink book lookup directly to Official's native route",
+    )
 
     # Local SQLite Cache / Outbox DB
     SQLITE_DB_PATH: str = Field(

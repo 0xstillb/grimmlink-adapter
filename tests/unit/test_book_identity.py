@@ -25,6 +25,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -477,6 +478,37 @@ async def test_book_file_id_not_null_prevents_duplicate_pk() -> None:
 # ===========================================================================
 # Test 13: MD5 auth through live route
 # ===========================================================================
+
+@pytest.mark.asyncio
+async def test_native_grimmlink_proxy_preserves_official_book_response(test_client: AsyncClient) -> None:
+    native_payload = {
+        "id": 25,
+        "title": "Native Book",
+        "primaryFile": {"id": 25, "bookId": 25, "fileName": "book.pdf", "bookType": "PDF"},
+    }
+    upstream_response = httpx.Response(200, json=native_payload)
+    with (
+        patch.object(settings, "GRIMMLINK_NATIVE_PROXY", True),
+        patch.object(
+            OfficialGrimmoryClient,
+            "request",
+            new_callable=AsyncMock,
+            return_value=upstream_response,
+        ) as native_request,
+    ):
+        response = await test_client.get(
+            "/api/grimmlink/v1/books/by-hash/native-hash",
+            headers={"x-auth-user": "reader", "x-auth-key": "md5-key"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == native_payload
+    native_request.assert_awaited_once()
+    assert native_request.await_args.args[:2] == (
+        "GET", "/api/grimmlink/v1/books/by-hash/native-hash",
+    )
+    assert native_request.await_args.kwargs["auth_mode"].value == "KOREADER"
+
 
 @pytest.mark.asyncio
 async def test_md5_auth_through_live_route(test_client: AsyncClient) -> None:

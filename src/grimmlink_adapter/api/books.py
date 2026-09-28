@@ -16,15 +16,17 @@ from datetime import UTC, datetime
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkReadStatusRequest,
     GrimmlinkReadStatusResponse,
 )
 from grimmlink_adapter.models.official import OfficialBookDTO
+from grimmlink_adapter.official.auth import AuthMode, KOReaderAuth
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import (
     OfficialAuthError,
@@ -101,7 +103,7 @@ async def _resolve_user_identity(creds: ClientCredentials) -> tuple[str, str]:
 async def get_book_by_hash(
     book_hash: str,
     creds: ClientCredentials = Depends(require_client_credentials),
-) -> OfficialBookDTO:
+) -> Response | OfficialBookDTO:
     """Resolve a book by its MD5 hash using the configured identity source.
 
     Resolution chain: Grimmory DB current/initial when enabled; otherwise
@@ -118,6 +120,34 @@ async def get_book_by_hash(
         502 — upstream verification failed
         401 — missing/invalid credentials
     """
+    # Optional native Grimmlink proxy: when enabled, preserve the official
+    # fork's exact response instead of rebuilding it through several /api/v1
+    # verification calls. This path is deliberately MD5-only because that is
+    # the auth contract used by the KOReader plugin.
+    if settings.GRIMMLINK_NATIVE_PROXY and creds.username and creds.md5_key and not creds.bearer_token:
+        client = OfficialGrimmoryClient(
+            koreader_auth=KOReaderAuth(username=creds.username, md5_key=creds.md5_key),
+        )
+        try:
+            upstream = await client.request(
+                "GET",
+                f"/api/grimmlink/v1/books/by-hash/{quote(book_hash, safe='')}",
+                auth_mode=AuthMode.KOREADER,
+            )
+            content_type = upstream.headers.get("content-type", "application/json")
+            return Response(content=upstream.content, media_type=content_type.split(";", 1)[0])
+        except OfficialPermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Book access was denied by Official Grimmory.") from exc
+        except OfficialAuthError as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed during book lookup.") from exc
+        except OfficialBadResponseError as exc:
+            code = status.HTTP_404_NOT_FOUND if exc.status_code == 404 else status.HTTP_502_BAD_GATEWAY
+            raise HTTPException(status_code=code, detail="Official book lookup failed.") from exc
+        except OfficialClientError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Official book lookup is unavailable.") from exc
+        finally:
+            await client.aclose()
+
     server, user = await _resolve_user_identity(creds)
 
     if not creds.bearer_token and creds.username and creds.md5_key:
