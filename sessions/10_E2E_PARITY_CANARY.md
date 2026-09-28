@@ -1,17 +1,17 @@
 # Session 10 — E2E Parity + Canary
 
-> ## Execution rule — Gemini first, Sol gate
+> ## Execution rule — Hermes E2E run, Sol gate
 >
-> - **Implementer:** Gemini Flash 3.8 runs/fixes scoped issues
-> - **Reviewer:** SOL PARITY REVIEW REQUIRED; no cutover without approval
-> - Gemini must inspect, implement, test, and update `docs/HANDOFF.md`, then **STOP before merge**.
-> - Gemini must not silently redesign architecture when blocked.
-> - GPT-5.6 Sol High reviews the diff, tests, HANDOFF, data-safety implications, and issues either `APPROVE` or a focused fix prompt.
-> - Merge only after required Sol gate passes.
+> - **E2E runner:** Hermes runs the parity matrix and records evidence; do not merge or cut over as part of the run.
+> - **Reviewer:** SOL PARITY REVIEW REQUIRED; no cutover without approval.
+> - Hermes must use a disposable/test Official Grimmory library, update `docs/PARITY_REPORT.md` and `docs/HANDOFF.md`, then stop for review.
+> - If a check fails, report the failing request/behavior and a focused remediation proposal; do not silently redesign the adapter or plugin.
+> - GPT-5.6 Sol High reviews the report, tests, HANDOFF, and data-safety implications, then issues either `APPROVE` or a focused fix prompt.
+> - Merge/cut over only after the required Sol gate passes.
 >
 
 
-**Recommended model:** GPT-5.6 Sol High for design/review; Flash can run mechanical matrix
+**Recommended model:** Hermes for the E2E run; GPT-5.6 Sol High for design/review.
 
 ## Objective
 พิสูจน์ผลลัพธ์เทียบ fork ก่อน cutover
@@ -19,7 +19,26 @@
 ## Prompt
 
 ```text
-Run E2E against disposable/test Official library first.
+Run E2E against a disposable/test Official library first. Never use production.
+
+Client under test: the existing GrimmLink KOReader plugin from
+https://github.com/0xstillb/GrimmLink, unchanged, pointed at this Adapter's
+`/api/grimmlink/v1` base URL. The Main branch currently identifies as v2.0.0;
+record the exact plugin commit/release used. The compatibility review found the
+same v1 route namespace and MD5-style `x-auth-user` / `x-auth-key` client
+contract, so do not patch the plugin preemptively.
+
+New-install setup is not Session 09 migration: create/use a disposable Official
+user and test library, configure the Adapter against that Official test server,
+and run `python -m grimmlink_adapter.link_account <username>` locally with the
+same test account before connecting the plugin. This provisions the local
+MD5-to-Official identity link; do not paste credentials or tokens into this
+repository, report, or chat.
+
+Preflight required before any writes: confirm the Adapter is deployed at the
+commit under test; confirm the Official staging URL, test account, KOReader
+device/profile, and disposable books/shelves are available. If any are missing,
+stop and report the exact blocker rather than using production data.
 
 Matrix:
 - EPUB native location push/pull
