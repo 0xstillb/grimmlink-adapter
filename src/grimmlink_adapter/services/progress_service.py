@@ -368,6 +368,26 @@ class ProgressService:
         }}
 
     @staticmethod
+    def _koreader_payload(snapshot: ProgressSnapshot) -> dict[str, Any]:
+        """Build the native KOReader payload used by Official's sync route."""
+        payload: dict[str, Any] = {
+            "document": snapshot.book_hash,
+            "bookHash": snapshot.book_hash,
+            "bookId": snapshot.book_id,
+            "bookFileId": snapshot.book_file_id,
+            "fileFormat": snapshot.format,
+            "progress": snapshot.native_location,
+            "location": snapshot.native_location if snapshot.is_reflowable else None,
+            "percentage": snapshot.official_fraction,
+            "currentPage": snapshot.current_page,
+            "totalPages": snapshot.total_pages,
+            "device": snapshot.device,
+            "deviceId": snapshot.device_id,
+            "timestamp": snapshot.timestamp_epoch,
+        }
+        return {key: value for key, value in payload.items() if value is not None}
+
+    @staticmethod
     def _upstream_error(exc: OfficialClientError) -> HTTPException:
         if isinstance(exc, OfficialAuthError) or exc.status_code == 401:
             return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Upstream authentication failed.")
@@ -403,7 +423,7 @@ class ProgressService:
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
             snapshot = snapshot_from_official(raw, book_hash)
-        if snapshot is None:
+        if snapshot is None or (snapshot.display_percent is None and snapshot.native_location is None):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No progress found for book hash.")
         await ProgressStateCache.put(owner_key, snapshot)
         return snapshot_to_grimmlink(snapshot)
@@ -419,15 +439,20 @@ class ProgressService:
         md5_key: str | None = None
         if md5_identity_required:
             username, md5_key = self._require_md5(creds)
-            try:
-                md5_current = snapshot_from_official(
-                    await self.official_client.get_koreader_progress(
-                        snapshot.book_hash, username, md5_key,
-                    ),
-                    snapshot.book_hash,
-                )
-            except OfficialClientError as exc:
-                raise self._upstream_error(exc) from exc
+            # Fixed-page progress is written through Official's native
+            # KOReader endpoint below.  Do not spend an extra GET here: the
+            # native endpoint is authoritative and this keeps page pushes
+            # responsive for PDF readers.
+            if not snapshot.is_fixed_page:
+                try:
+                    md5_current = snapshot_from_official(
+                        await self.official_client.get_koreader_progress(
+                            snapshot.book_hash, username, md5_key,
+                        ),
+                        snapshot.book_hash,
+                    )
+                except OfficialClientError as exc:
+                    raise self._upstream_error(exc) from exc
         verified_bearer: str | None = None
         resolved_bearer: str | None = None
         resolved_book_id: int | None = snapshot.book_id
@@ -442,6 +467,30 @@ class ProgressService:
             self._reconcile_identity(snapshot, resolved_file_id, resolved_format)
         else:
             owner_key = self._owner_key(creds)
+            if snapshot.is_fixed_page:
+                if await ProgressStateCache.manual_status_is_newer(
+                    owner_key, snapshot.book_hash, snapshot.timestamp_epoch, snapshot.book_id,
+                ):
+                    return {
+                        "status": "conflict",
+                        "updated": False,
+                        "conflictDetected": True,
+                        "message": "A newer manual read status is preserved over this progress update.",
+                    }
+                assert username is not None and md5_key is not None
+                try:
+                    result = await self.official_client.update_koreader_progress(
+                        self._koreader_payload(snapshot), username, md5_key,
+                    )
+                except OfficialClientError as exc:
+                    raise self._upstream_error(exc) from exc
+                await ProgressStateCache.put(owner_key, snapshot)
+                extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
+                return {
+                    "status": "progress updated",
+                    "projection": "koreader-native",
+                    **extras,
+                }
             # A newer manual status must win without requiring a network lookup.
             if snapshot.is_fixed_page and snapshot.book_id is None and await ProgressStateCache.manual_status_is_newer(
                 owner_key, snapshot.book_hash, snapshot.timestamp_epoch, snapshot.book_id,
