@@ -95,6 +95,37 @@ async def test_progress_put_converts_percent_to_official_fraction() -> None:
 
 
 @pytest.mark.asyncio
+async def test_md5_pdf_without_book_id_resolves_hash_before_projection() -> None:
+    client = AsyncMock()
+    client.get_koreader_progress.return_value = {}
+    client.get_app_book_progress.return_value = {}
+    client.update_book_progress.return_value = {}
+    service = ProgressService(client)
+    with patch.object(
+        ProgressService,
+        "_resolve_bearer_book",
+        new=AsyncMock(return_value=("verified-bearer", 25, 25, "PDF")),
+    ) as resolve_book, patch(
+        "grimmlink_adapter.services.progress_service.get_official_bearer",
+        new=AsyncMock(return_value=VerifiedBearer("jwt-token", 7)),
+    ):
+        result = await service.update_progress(
+            KoreaderProgressPayload(
+                bookHash="pdf-hash-missing-id", fileFormat="PDF", progress="12",
+                currentPage=12, totalPages=663, timestamp=100,
+            ),
+            CREDS,
+        )
+
+    assert result["status"] == "progress updated"
+    assert result["projection"] == "official-app"
+    assert resolve_book.await_args_list[0].args == (CREDS, "pdf-hash-missing-id", None)
+    client.update_book_progress.assert_awaited_once_with(
+        25, {"pdfProgress": {"page": 12, "percentage": pytest.approx(1.81)}}, "verified-bearer",
+    )
+
+
+@pytest.mark.asyncio
 async def test_progress_put_rejects_stale_timestamp_and_force_overrides() -> None:
     client = AsyncMock()
     client.get_koreader_progress.side_effect = [
@@ -245,14 +276,19 @@ async def test_bearer_stale_app_timestamp_returns_conflict() -> None:
 @pytest.mark.asyncio
 async def test_md5_pdf_requires_verified_book_before_mutation() -> None:
     client = AsyncMock()
-    with pytest.raises(HTTPException) as caught:
-        await ProgressService(client).update_progress(
-            KoreaderProgressPayload(
-                bookHash="pdf-unmapped", fileFormat="PDF", progress="55",
-                currentPage=55, totalPages=250, timestamp=100,
-            ),
-            CREDS,
-        )
+    with patch.object(
+        ProgressService,
+        "_resolve_bearer_book",
+        new=AsyncMock(side_effect=HTTPException(status_code=501, detail="A verified hash-to-book mapping is required")),
+    ):
+        with pytest.raises(HTTPException) as caught:
+            await ProgressService(client).update_progress(
+                KoreaderProgressPayload(
+                    bookHash="pdf-unmapped", fileFormat="PDF", progress="55",
+                    currentPage=55, totalPages=250, timestamp=100,
+                ),
+                CREDS,
+            )
     assert caught.value.status_code == 501
     client.update_koreader_progress.assert_not_awaited()
 

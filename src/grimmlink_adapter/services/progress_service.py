@@ -442,7 +442,20 @@ class ProgressService:
             self._reconcile_identity(snapshot, resolved_file_id, resolved_format)
         else:
             owner_key = self._owner_key(creds)
-            if snapshot.book_id is not None or snapshot.format is None:
+            # A newer manual status must win without requiring a network lookup.
+            if snapshot.is_fixed_page and snapshot.book_id is None and await ProgressStateCache.manual_status_is_newer(
+                owner_key, snapshot.book_hash, snapshot.timestamp_epoch, snapshot.book_id,
+            ):
+                return {
+                    "status": "conflict",
+                    "updated": False,
+                    "conflictDetected": True,
+                    "message": "A newer manual read status is preserved over this progress update.",
+                }
+            # Fixed-page formats (especially PDF) must use the Official app
+            # projection. KOReader may omit bookId while still providing a
+            # verified bookHash; resolve that hash before requiring a numeric ID.
+            if snapshot.book_id is not None or snapshot.format is None or snapshot.is_fixed_page:
                 try:
                     _, resolved_book_id, resolved_file_id, resolved_format = await self._resolve_bearer_book(
                         creds, snapshot.book_hash, snapshot.book_id,
@@ -450,7 +463,7 @@ class ProgressService:
                     snapshot.book_id = resolved_book_id
                     self._reconcile_identity(snapshot, resolved_file_id, resolved_format)
                 except HTTPException:
-                    if snapshot.book_id is not None or snapshot.format is None:
+                    if snapshot.book_id is not None or snapshot.format is None or snapshot.is_fixed_page:
                         raise
         if await ProgressStateCache.manual_status_is_newer(
             owner_key, snapshot.book_hash, snapshot.timestamp_epoch, snapshot.book_id,
