@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from datetime import UTC, datetime
 from typing import Any
@@ -24,6 +25,7 @@ from grimmlink_adapter.state.cache import ProgressStateCache
 
 REFLOWABLE_FORMATS = frozenset({"EPUB", "MOBI", "AZW3", "FB2", "HTML"})
 FIXED_PAGE_FORMATS = frozenset({"PDF", "CBZ", "CBR", "DJVU"})
+logger = logging.getLogger(__name__)
 
 
 def calculate_display_percentage(current_page: int, total_pages: int) -> float:
@@ -498,11 +500,32 @@ class ProgressService:
                     )
                 except OfficialClientError as exc:
                     raise self._upstream_error(exc) from exc
+                projection = "koreader-native"
+                try:
+                    projection_bearer, resolved_book_id, _, _ = await self._resolve_bearer_book(
+                        creds, snapshot.book_hash, snapshot.book_id,
+                    )
+                    page = snapshot.current_page
+                    if page is None and snapshot.native_location is not None:
+                        page = _page(snapshot.native_location)
+                    if page is None:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PDF page is required.")
+                    await self.official_client.update_book_progress(
+                        resolved_book_id,
+                        {"pdfProgress": {"page": page, "percentage": snapshot.display_percent}},
+                        projection_bearer,
+                    )
+                    projection = "koreader-native+official-app"
+                except (HTTPException, OfficialClientError) as exc:
+                    # Native KOReader sync already succeeded. Keep that result
+                    # visible to the device, but make an App projection failure
+                    # explicit in the Adapter log instead of hiding it.
+                    logger.warning("PDF App progress projection failed after native sync: %s", type(exc).__name__)
                 await ProgressStateCache.put(owner_key, snapshot)
                 extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
                 return {
                     "status": "progress updated",
-                    "projection": "koreader-native",
+                    "projection": projection,
                     **extras,
                 }
             # A newer manual status must win without requiring a network lookup.
