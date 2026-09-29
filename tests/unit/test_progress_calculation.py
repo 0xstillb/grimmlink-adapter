@@ -24,12 +24,12 @@ def test_progress_display_percentage_boundaries() -> None:
 
 
 def test_rating_normalization() -> None:
-    # 10 scale to 5 scale
-    assert normalize_rating(10.0, source_scale=10) == 5.0
-    assert normalize_rating(8.0, source_scale=10) == 4.0
-    assert normalize_rating(5.0, source_scale=10) == 2.5
-    # 5 scale passthrough
-    assert normalize_rating(4.5, source_scale=5) == 4.5
+    # Official Grimmory personal ratings use a 1-10 scale.
+    assert normalize_rating(10.0, source_scale=10) == 10.0
+    assert normalize_rating(8.0, source_scale=10) == 8.0
+    assert normalize_rating(5.0, source_scale=10) == 5.0
+    # A 5-point source expands deterministically to the 10-point scale.
+    assert normalize_rating(4.5, source_scale=5) == 9.0
 
 
 def test_session_idempotency_key_deterministic() -> None:

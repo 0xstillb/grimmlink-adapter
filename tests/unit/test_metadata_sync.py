@@ -59,33 +59,33 @@ def verified_bearer() -> VerifiedBearer:
 
 
 def test_rating_normalization_helper() -> None:
-    # 1-10 scale maps to 1-5
-    assert normalize_rating(10, source_scale=10) == 5
-    assert normalize_rating(8, source_scale=10) == 4
-    assert normalize_rating(7, source_scale=10) == 4
+    # Official Grimmory stores personal ratings on a 1-10 scale.
+    assert normalize_rating(10, source_scale=10) == 10
+    assert normalize_rating(8, source_scale=10) == 8
+    assert normalize_rating(7, source_scale=10) == 7
     assert normalize_rating(1, source_scale=10) == 1
-    assert normalize_rating(5.0, source_scale=10) == 2.5
-    assert normalize_rating(9.0, source_scale=10) == 4.5
+    assert normalize_rating(5.0, source_scale=10) == 5.0
+    assert normalize_rating(9.0, source_scale=10) == 9.0
     assert MetadataService()._normalize_rating_input(
         GrimmlinkRatingPayload(value=5.0, scale=10), 1
-    ).official_rating == 3
+    ).official_rating == 5
     assert MetadataService()._normalize_rating_input(
         GrimmlinkRatingPayload(value=9.0, scale=10), 1
-    ).official_rating == 5
+    ).official_rating == 9
     assert normalize_rating(0, source_scale=10) is None  # Reset
     assert normalize_rating(-1, source_scale=10) is None  # Reset
 
-    # 1-5 scale maps to 1-5
-    assert normalize_rating(5, source_scale=5) == 5
-    assert normalize_rating(4, source_scale=5) == 4
-    assert normalize_rating(1, source_scale=5) == 1
+    # A 1-5 source is expanded to Official's 1-10 scale.
+    assert normalize_rating(5, source_scale=5) == 10
+    assert normalize_rating(4, source_scale=5) == 8
+    assert normalize_rating(1, source_scale=5) == 2
 
 
 @pytest.mark.asyncio
 async def test_rating_conversion_and_reset(
     mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test 1-10 to 1-5 conversion, explicit reset, and prevention of conversion drift."""
+    """Test Official's 1-10 scale, explicit reset, and no conversion drift."""
     monkeypatch.setattr(
         "grimmlink_adapter.services.metadata_service.get_official_bearer",
         AsyncMock(return_value=verified_bearer),
@@ -93,12 +93,12 @@ async def test_rating_conversion_and_reset(
     client = OfficialGrimmoryClient()
     client.update_personal_rating = AsyncMock(return_value={})  # type: ignore[method-assign]
     client.reset_personal_rating = AsyncMock(return_value=None)  # type: ignore[method-assign]
-    client.get_personal_rating = AsyncMock(return_value=4)  # type: ignore[method-assign]
+    client.get_personal_rating = AsyncMock(return_value=7)  # type: ignore[method-assign]
     client.get_bookmarks_for_book = AsyncMock(return_value=[])  # type: ignore[method-assign]
 
     service = MetadataService(official_client=client)
 
-    # Push rating 7 (scale 10) -> maps to 4/5 on Official
+    # Push rating 7 (scale 10) -> remains 7 on Official.
     req = GrimmlinkMetadataSyncRequest(
         bookId=10,
         rating=GrimmlinkRatingPayload(value=7, scale=10, dedupeKey="rating:10:koreader"),
@@ -109,11 +109,10 @@ async def test_rating_conversion_and_reset(
     assert resp.results is not None
     assert resp.results.rating is not None
     assert resp.results.rating.status == "synced"
-    client.update_personal_rating.assert_awaited_once_with(10, 4, verified_bearer)
+    client.update_personal_rating.assert_awaited_once_with(10, 7, verified_bearer)
 
-    # Pull rating: prevent conversion drift!
-    # Official has 4. Without drift prevention, 4 * 2 = 8 (drifted from 7).
-    # With drift prevention, local applied history preserved 7 (scale 10)!
+    # Pull rating: preserve the same 1-10 value without conversion drift.
+    # Official has 7 and the local source scale is also 10: preserve 7 exactly.
     pull_resp = await service.pull_metadata(book_id=10, creds=mock_creds)
     assert pull_resp.ok is True
     assert len(pull_resp.items) == 1
@@ -516,7 +515,7 @@ async def test_rating_requires_value_or_explicit_reset_and_preserves_review(
     client = OfficialGrimmoryClient()
     client.update_personal_rating = AsyncMock(return_value={})  # type: ignore[method-assign]
     client.reset_personal_rating = AsyncMock(return_value=None)  # type: ignore[method-assign]
-    client.get_personal_rating = AsyncMock(return_value=4)  # type: ignore[method-assign]
+    client.get_personal_rating = AsyncMock(return_value=8)  # type: ignore[method-assign]
     client.get_bookmarks_for_book = AsyncMock(return_value=[])  # type: ignore[method-assign]
     service = MetadataService(official_client=client)
 

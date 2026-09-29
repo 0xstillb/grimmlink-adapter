@@ -1222,7 +1222,7 @@ class OfficialGrimmoryClient:
     async def update_personal_rating(
         self, book_id: int, rating: int, bearer_token: str,
     ) -> dict[str, Any]:
-        """Update personal rating (1-5) on Official Grimmory."""
+        """Update personal rating (1-10) on Official Grimmory."""
         resp = await self._send_request(
             method="PUT",
             path=OFFICIAL_BOOKS_PERSONAL_RATING,

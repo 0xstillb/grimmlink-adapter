@@ -15,7 +15,7 @@ Field Mapping Table:
 --------------------
 | Entity | Legacy Field | Internal Normalized Field | Official Grimmory Field | Loss Policy / Notes |
 |---|---|---|---|---|
-| Rating | value / rating (1-10) | rating_value: float | rating: int (1-5) | Converted with deterministic half-up rounding and clamped to 1-5. Source scale & value saved in SQLite history to prevent conversion drift. |
+| Rating | value / rating (1-10) | rating_value: float | rating: int (1-10) | Preserve Official's 1-10 personal-rating scale. A 1-5 source is expanded to 1-10. Source scale & value saved in SQLite history to prevent conversion drift. |
 | Rating | scale (default 10) | source_scale: int | N/A | Preserved in local SQLite applied history. |
 | Rating | val <= 0 / deleted / reset | is_reset: bool | POST /api/v1/books/reset-personal-rating | Explicit reset; removes personal rating. |
 | Rating | review | review: str | N/A | Dropped upstream (not supported by Official rating endpoint); preserved in SQLite history. |
@@ -94,7 +94,7 @@ def is_valid_cfi(cfi: str | None) -> bool:
 
 
 def normalize_rating(raw_rating: float | int | None, source_scale: int = 10) -> float | int | None:
-    """Normalize rating from source scale (1-10 or 1-5) to 1-5 official scale."""
+    """Normalize rating to Official Grimmory's 1-10 personal-rating scale."""
     if raw_rating is None:
         return None
     try:
@@ -103,13 +103,12 @@ def normalize_rating(raw_rating: float | int | None, source_scale: int = 10) -> 
         return None
     if val <= 0:
         return None
+    if source_scale == 5:
+        val *= 2.0
+    val = max(1.0, min(10.0, val))
     if isinstance(raw_rating, float):
-        if source_scale == 10:
-            return max(1.0, min(5.0, round(val / 2.0, 1)))
-        return max(1.0, min(5.0, round(val, 1)))
-    if source_scale == 10:
-        return max(1, min(5, (int(val) + 1) // 2))
-    return max(1, min(5, int(math.floor(val + 0.5))))
+        return round(val, 1)
+    return int(math.floor(val + 0.5))
 
 
 def compute_content_hash(item_type: str, data: dict[str, Any]) -> str:
@@ -892,7 +891,7 @@ class MetadataService:
                         if ret_val.is_integer():
                             ret_val = int(ret_val)
                     else:
-                        ret_val = official_rating * 2
+                        ret_val = official_rating
 
                     now_iso = datetime.now(UTC).isoformat()
                     updated_at_val = (
