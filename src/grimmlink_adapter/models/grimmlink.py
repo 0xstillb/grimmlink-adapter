@@ -185,7 +185,9 @@ class GrimmlinkItemResult(BaseModel):
     type: str | None = None
     dedupeKey: str | None = None
     itemId: str | None = None
-    status: str = "SUCCESS"  # 'SUCCESS', 'SKIPPED', 'DUPLICATE', 'FAILED', 'created', 'duplicate', 'error'
+    # Fork-compatible legacy statuses consumed by GrimmLink. Internal outbox
+    # statuses are intentionally kept separate from this response contract.
+    status: str = "synced"
     id: str | None = None
     reason: str | None = None
     error: str | None = None

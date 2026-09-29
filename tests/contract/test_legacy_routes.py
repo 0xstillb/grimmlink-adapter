@@ -207,7 +207,7 @@ async def test_metadata_sync_routes_contract(
     data = resp.json()
     assert data["ok"] is True
     assert data["appliedCount"] == 1
-    assert data["results"]["rating"]["status"] == "SUCCESS"
+    assert data["results"]["rating"]["status"] == "synced"
 
     # 2. GET /syncs/metadata
     pull_resp = await test_client.get(

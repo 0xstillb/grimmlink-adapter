@@ -478,7 +478,7 @@ class MetadataService:
             existing = await MetadataSyncStore.get_applied_record(owner_key, book_id, "rating", dedupe_key)
             if existing and existing.content_hash == content_hash and not rating_norm.is_reset:
                 results_rating = GrimmlinkItemResult(
-                    type="RATING", dedupeKey=dedupe_key, status="DUPLICATE", id=f"rating-{book_id}",
+                    type="RATING", dedupeKey=dedupe_key, status="duplicate", id=f"rating-{book_id}",
                 )
                 skipped_count += 1
             else:
@@ -513,7 +513,7 @@ class MetadataService:
                     )
                     await MetadataSyncStore.record_applied(record)
                     results_rating = GrimmlinkItemResult(
-                        type="RATING", dedupeKey=dedupe_key, status="SUCCESS", id=f"rating-{book_id}",
+                        type="RATING", dedupeKey=dedupe_key, status="synced", id=f"rating-{book_id}",
                     )
                     applied_count += 1
                 else:
@@ -547,7 +547,7 @@ class MetadataService:
                     )
                     await MetadataSyncStore.record_applied(record)
                     results_rating = GrimmlinkItemResult(
-                        type="RATING", dedupeKey=dedupe_key, status="SUCCESS", id=f"rating-{book_id}",
+                        type="RATING", dedupeKey=dedupe_key, status="synced", id=f"rating-{book_id}",
                     )
                     applied_count += 1
 
@@ -584,14 +584,14 @@ class MetadataService:
                     results_bookmarks.append(
                         GrimmlinkItemResult(
                             type="BOOKMARK", dedupeKey=bm.dedupe_key,
-                            status="SUCCESS", id=f"bm-{remote_id}",
+                            status="synced", id=f"bm-{remote_id}",
                         )
                     )
                     applied_count += 1
                 else:
                     results_bookmarks.append(
                         GrimmlinkItemResult(
-                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="FAILED",
+                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="failed",
                             reason="No confirmed Official bookmark mapping is available for deletion.",
                         )
                     )
@@ -600,7 +600,7 @@ class MetadataService:
                 if existing and existing.content_hash == content_hash and not existing.is_deleted:
                     results_bookmarks.append(
                         GrimmlinkItemResult(
-                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="DUPLICATE",
+                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="duplicate",
                             id=f"bm-{existing.official_id or bm.local_id}",
                         )
                     )
@@ -666,7 +666,7 @@ class MetadataService:
                     await MetadataSyncStore.record_applied(record)
                     results_bookmarks.append(
                         GrimmlinkItemResult(
-                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="SUCCESS", id=f"bm-{remote_id}",
+                            type="BOOKMARK", dedupeKey=bm.dedupe_key, status="synced", id=f"bm-{remote_id}",
                         )
                     )
                     applied_count += 1
@@ -704,14 +704,14 @@ class MetadataService:
                     results_annotations.append(
                         GrimmlinkItemResult(
                             type="ANNOTATION", dedupeKey=ann.dedupe_key,
-                            status="SUCCESS", id=f"ann-{remote_id}",
+                            status="synced", id=f"ann-{remote_id}",
                         )
                     )
                     applied_count += 1
                 else:
                     results_annotations.append(
                         GrimmlinkItemResult(
-                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="FAILED",
+                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="failed",
                             reason="No confirmed Official annotation mapping is available for deletion.",
                         )
                     )
@@ -720,7 +720,7 @@ class MetadataService:
                 if existing and existing.content_hash == content_hash and not existing.is_deleted:
                     results_annotations.append(
                         GrimmlinkItemResult(
-                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="DUPLICATE",
+                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="duplicate",
                             id=f"ann-{existing.official_id or ann.local_id}",
                         )
                     )
@@ -788,7 +788,7 @@ class MetadataService:
                     await MetadataSyncStore.record_applied(record)
                     results_annotations.append(
                         GrimmlinkItemResult(
-                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="SUCCESS", id=f"ann-{remote_id}",
+                            type="ANNOTATION", dedupeKey=ann.dedupe_key, status="synced", id=f"ann-{remote_id}",
                         )
                     )
                     applied_count += 1

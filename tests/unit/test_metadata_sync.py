@@ -108,7 +108,7 @@ async def test_rating_conversion_and_reset(
     assert resp.appliedCount == 1
     assert resp.results is not None
     assert resp.results.rating is not None
-    assert resp.results.rating.status == "SUCCESS"
+    assert resp.results.rating.status == "synced"
     client.update_personal_rating.assert_awaited_once_with(10, 4, verified_bearer)
 
     # Pull rating: prevent conversion drift!
@@ -165,7 +165,7 @@ async def test_duplicate_bookmark_deduplication(
     resp1 = await service.sync_metadata(req, creds=mock_creds)
     assert resp1.appliedCount == 1
     assert resp1.skippedCount == 0
-    assert resp1.results.bookmarks[0].status == "SUCCESS"
+    assert resp1.results.bookmarks[0].status == "synced"
     assert resp1.results.bookmarks[0].id == "bm-101"
     client.create_bookmark.assert_awaited_once()
 
@@ -173,7 +173,7 @@ async def test_duplicate_bookmark_deduplication(
     resp2 = await service.sync_metadata(req, creds=mock_creds)
     assert resp2.appliedCount == 0
     assert resp2.skippedCount == 1
-    assert resp2.results.bookmarks[0].status == "DUPLICATE"
+    assert resp2.results.bookmarks[0].status == "duplicate"
     assert resp2.results.bookmarks[0].id == "bm-101"
     assert client.create_bookmark.await_count == 1  # Unchanged!
 
@@ -582,7 +582,7 @@ async def test_annotation_unsupported_only_change_is_not_deduped(
         GrimmlinkMetadataSyncRequest(bookId=71, annotations=[changed]), creds=mock_creds
     )
 
-    assert response.results.annotations[0].status == "SUCCESS"
+    assert response.results.annotations[0].status == "synced"
     client.update_bookmark.assert_awaited_once()
     stored = await MetadataSyncStore.get_applied_record(
         "42", 71, "annotation", "ann:unsupported-update"
@@ -610,7 +610,7 @@ async def test_unmapped_delete_is_not_reported_as_success(
         ),
         creds=mock_creds,
     )
-    assert response.results.bookmarks[0].status == "FAILED"
+    assert response.results.bookmarks[0].status == "failed"
     assert response.appliedCount == 0
     client.delete_bookmark.assert_not_awaited()
 
