@@ -117,39 +117,39 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 9. Regular และ magic shelves
 
-- [ ] list regular shelves ทั้ง empty และ non-empty
-- [ ] list books ใน regular shelf ครบ
-- [ ] list magic shelves ครบ
-- [ ] magic shelf หลายหน้าถูกอ่านครบโดยไม่มี duplicate
-- [ ] snapshot drift ระหว่าง pagination fail closed
-- [ ] regular และ magic shelf ที่มี numeric ID เดียวกันไม่ชนกัน
-- [ ] same book อยู่หลาย shelf แล้วยังรักษา ownership ทุก shelf
-- [ ] book ที่ไม่มี primary file ยังอ่านรายการได้โดยไม่สร้าง download ปลอม
-- [ ] series name/number และ file format/extension ถูกต้อง
+- [x] list regular shelves ทั้ง empty และ non-empty
+- [x] list books ใน regular shelf ครบ
+- [x] list magic shelves ครบ
+- [x] magic shelf หลายหน้าถูกอ่านครบโดยไม่มี duplicate
+- [x] snapshot drift ระหว่าง pagination fail closed
+- [x] regular และ magic shelf ที่มี numeric ID เดียวกันไม่ชนกัน
+- [x] same book อยู่หลาย shelf แล้วยังรักษา ownership ทุก shelf
+- [x] book ที่ไม่มี primary file ยังอ่านรายการได้โดยไม่สร้าง download ปลอม
+- [x] series name/number และ file format/extension ถูกต้อง
 
 ## 10. Download และ local file safety
 
-- [ ] regular shelf download ได้ binary ที่ถูกต้อง
-- [ ] ตรวจ content type, signature, size และ checksum
-- [ ] timeout/HTML error response ไม่ถูกบันทึกเป็น ebook
-- [ ] first-read stream failure ปิด stream/client ถูกต้อง
-- [ ] existing user-owned file ไม่ถูกแทนหรือลบ
-- [ ] Adapter-managed file ถูก register หลังเขียนสำเร็จเท่านั้น
-- [ ] path traversal และ path นอก managed root ถูกปฏิเสธ
+- [x] regular shelf download ได้ binary ที่ถูกต้อง
+- [x] ตรวจ content type, signature, size และ checksum
+- [x] timeout/HTML error response ไม่ถูกบันทึกเป็น ebook
+- [x] first-read stream failure ปิด stream/client ถูกต้อง
+- [x] existing user-owned file ไม่ถูกแทนหรือลบ
+- [x] Adapter-managed file ถูก register หลังเขียนสำเร็จเท่านั้น
+- [x] path traversal และ path นอก managed root ถูกปฏิเสธ
 
 ## 11. Shelf mutation และ cleanup
 
-- [ ] regular shelf removal เรียก Official bulk unassign ถูก payload
-- [ ] Official mutation สำเร็จก่อนเปลี่ยน local ownership
-- [ ] timeout เก็บ pending outbox และ retry operation เดิม
-- [ ] `401`/`403` ไม่ถูกแปลงเป็น success
-- [ ] magic shelf manual removal ถูกปฏิเสธและไม่มี remote mutation
-- [ ] cleanup ลบเฉพาะ Adapter-managed file หลัง complete snapshot
-- [ ] ไม่ลบเมื่อหนังสือยังอยู่ shelf อื่น
-- [ ] ไม่ลบเมื่อ magic shelf หรือ provider อื่นยังอ้างถึง
-- [ ] ไม่ลบ user-owned, replaced หรือ size-changed file
-- [ ] incomplete snapshot ไม่ทำ cleanup
-- [ ] owner scope ของ user หนึ่งไม่แก้ ownership ของอีก user
+- [x] regular shelf removal เรียก Official bulk unassign ถูก payload
+- [x] Official mutation สำเร็จก่อนเปลี่ยน local ownership
+- [x] timeout เก็บ pending outbox และ retry operation เดิม
+- [x] `401`/`403` ไม่ถูกแปลงเป็น success
+- [x] magic shelf manual removal ถูกปฏิเสธและไม่มี remote mutation
+- [x] cleanup ลบเฉพาะ Adapter-managed file หลัง complete snapshot
+- [x] ไม่ลบเมื่อหนังสือยังอยู่ shelf อื่น
+- [x] ไม่ลบเมื่อ magic shelf หรือ provider อื่นยังอ้างถึง
+- [x] ไม่ลบ user-owned, replaced หรือ size-changed file
+- [x] incomplete snapshot ไม่ทำ cleanup
+- [x] owner scope ของ user หนึ่งไม่แก้ ownership ของอีก user
 
 ## 12. Ratings, bookmarks และ annotations
 

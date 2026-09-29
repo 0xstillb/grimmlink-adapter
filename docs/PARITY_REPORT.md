@@ -39,8 +39,8 @@ token, refresh token หรือ MD5 key
 | EPUB native progress | NOT_RUN | |
 | EPUB Web Reader projection | NOT_RUN | Known XPointer → CFI issue |
 | PDF progress | NOT_RUN | |
-| Shelves/download | NOT_RUN | |
-| Shelf mutation/cleanup | NOT_RUN | |
+| Shelves/download | PASS | Operator-confirmed shelves listing and download E2E |
+| Shelf mutation/cleanup | PASS | Operator-confirmed shelf mutation and cleanup E2E |
 | Ratings/bookmarks/annotations | NOT_RUN | |
 | Reading sessions | NOT_RUN | |
 | OPF ingestion | NOT_RUN | |
@@ -59,6 +59,8 @@ token, refresh token หรือ MD5 key
 | AUTO-RUFF | PASS | `.venv/Scripts/python -m ruff check .` | No lint errors | All checks passed | Command output from this run |
 | AUTO-MYPY | PASS | `.venv/Scripts/python -m mypy src` | Strict typecheck passes | No issues in 49 source files | Command output from this run |
 | AUTO-DIFF | PASS | `git diff --check` | No whitespace errors | Passed | Command output from this run |
+| SHELF-DOWNLOAD | PASS | Shelves listing and download E2E | Shelf contents and downloaded files behave correctly | Operator-confirmed PASS | Current E2E operator result |
+| SHELF-MUTATION-CLEANUP | PASS | Shelf mutation and cleanup E2E | Mutation and cleanup rules behave correctly | Operator-confirmed PASS | Current E2E operator result |
 
 Automated warnings: one Starlette deprecation warning for
 `HTTP_422_UNPROCESSABLE_ENTITY`, plus a pytest cache write warning caused by
@@ -87,7 +89,7 @@ local Windows permissions. Neither warning failed a test.
 
 ## Final decision
 
-- Overall: `IN_PROGRESS — AUTOMATED PASS, LIVE E2E NOT_RUN`
+- Overall: `IN_PROGRESS — AUTOMATED PASS, PARTIAL LIVE E2E PASS, REMAINING LIVE E2E NOT_RUN`
 - Data-loss/sync-safety blockers: `UNKNOWN`
 - Reviewer: `NOT_RUN`
 - Decision: `NOT_RUN`
