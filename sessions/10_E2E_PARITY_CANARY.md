@@ -21,6 +21,11 @@
 ```text
 Run E2E against a disposable/test Official library first. Never use production.
 
+Use `docs/E2E_CHECKLIST.md` as the executable master checklist and record every
+result in `docs/PARITY_REPORT.md`. A matrix line is not complete until its
+observable result and evidence are recorded as PASS, FAIL, ACCEPTED_DIFFERENCE,
+BLOCKER, or NOT_RUN.
+
 Client under test: the existing GrimmLink KOReader plugin from
 https://github.com/0xstillb/GrimmLink, unchanged, pointed at this Adapter's
 `/api/grimmlink/v1` base URL. The Main branch currently identifies as v2.0.0;
