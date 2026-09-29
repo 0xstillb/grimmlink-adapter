@@ -33,7 +33,7 @@ token, refresh token หรือ MD5 key
 | Area | Result | Evidence/notes |
 | --- | --- | --- |
 | Automated quality gate | PASS | 298 pytest tests, Ruff, mypy, and `git diff --check` passed |
-| Authentication/account isolation | NOT_RUN | |
+| Authentication/account isolation | WAIVED — SINGLE-USER SCOPE | Link Account/Bearer happy path is used; cross-account isolation matrix intentionally skipped |
 | Legacy contract/capabilities | NOT_RUN | |
 | Book identity/hash safety | NOT_RUN | |
 | EPUB native progress | NOT_RUN | |
@@ -59,6 +59,7 @@ token, refresh token หรือ MD5 key
 | AUTO-RUFF | PASS | `.venv/Scripts/python -m ruff check .` | No lint errors | All checks passed | Command output from this run |
 | AUTO-MYPY | PASS | `.venv/Scripts/python -m mypy src` | Strict typecheck passes | No issues in 49 source files | Command output from this run |
 | AUTO-DIFF | PASS | `git diff --check` | No whitespace errors | Passed | Command output from this run |
+| AUTH-SCOPE | WAIVED — SINGLE-USER SCOPE | Link Account/Bearer happy path | Cross-account matrix | Intentionally skipped because deployment uses one user | Operator scope decision |
 | SHELF-DOWNLOAD | PASS | Shelves listing and download E2E | Shelf contents and downloaded files behave correctly | Operator-confirmed PASS | Current E2E operator result |
 | SHELF-MUTATION-CLEANUP | PASS | Shelf mutation and cleanup E2E | Mutation and cleanup rules behave correctly | Operator-confirmed PASS | Current E2E operator result |
 
@@ -93,4 +94,5 @@ local Windows permissions. Neither warning failed a test.
 - Data-loss/sync-safety blockers: `UNKNOWN`
 - Reviewer: `NOT_RUN`
 - Decision: `NOT_RUN`
+- Scope exception: cross-account authentication/isolation tests are intentionally waived for this single-user deployment; Link Account/Bearer happy path remains used.
 
