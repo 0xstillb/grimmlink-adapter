@@ -150,6 +150,7 @@
 
 - operator-confirmed: KOReader ↔ KOReader PDF sync และ Jump ผ่าน
 - operator-confirmed: PDF Web Reader ↔ KOReader sync และ Jump ผ่าน
+- operator-confirmed: Offline → reconnect queue replay ผ่าน และไม่เกิด duplicate
 - Adapter production health หลัง deploy เป็น `healthy`, restart `0`
 
 ## Historical known issue / regression watch
@@ -280,6 +281,7 @@ XPointer string อย่างเดียวไม่น่าเชื่อ�
 - [x] EPUB อ่านตำแหน่งแรกแล้วขึ้น `READING`
 - [x] EPUB native Pull รับ XPointer กลับได้
 - [x] Operator-confirmed: EPUB all surfaces / Web Reader ↔ KOReader ผ่าน
+- [x] Operator-confirmed: Offline → reconnect queue replay ผ่าน
 - [x] เปิด Tracking ไว้ระหว่างทดสอบ
 - [x] Adapter production health เป็น `healthy`
 - [x] ตรวจ log ให้สัมพันธ์กับเวลาทดสอบ

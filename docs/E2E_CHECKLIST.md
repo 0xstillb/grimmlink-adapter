@@ -212,6 +212,7 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 15. Restart, offline และ failure recovery
 
+- [x] Operator-confirmed: Offline → reconnect queue replay ผ่านและไม่ duplicate
 - [ ] restart Adapter ระหว่างไม่มี pending operation
 - [ ] restart Adapter ขณะมี pending shelf mutation
 - [ ] restart Adapter ขณะมี pending metadata mutation
