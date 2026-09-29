@@ -34,7 +34,7 @@ token, refresh token หรือ MD5 key
 | --- | --- | --- |
 | Automated quality gate | PASS | 298 pytest tests, Ruff, mypy, and `git diff --check` passed |
 | Authentication/account isolation | WAIVED — SINGLE-USER SCOPE | Link Account/Bearer happy path is used; cross-account isolation matrix intentionally skipped |
-| Legacy contract/capabilities | NOT_RUN | |
+| Legacy contract/capabilities | PASS | 50 contract tests plus live capabilities/auth/healthcheck smoke passed |
 | Book identity/hash safety | NOT_RUN | |
 | EPUB native progress | NOT_RUN | |
 | EPUB Web Reader projection | NOT_RUN | Known XPointer → CFI issue |
@@ -60,6 +60,10 @@ token, refresh token หรือ MD5 key
 | AUTO-MYPY | PASS | `.venv/Scripts/python -m mypy src` | Strict typecheck passes | No issues in 49 source files | Command output from this run |
 | AUTO-DIFF | PASS | `git diff --check` | No whitespace errors | Passed | Command output from this run |
 | AUTH-SCOPE | WAIVED — SINGLE-USER SCOPE | Link Account/Bearer happy path | Cross-account matrix | Intentionally skipped because deployment uses one user | Operator scope decision |
+| LEGACY-CONTRACT | PASS | `pytest -q tests/contract` | Frozen GrimmLink route/schema/error contract | 50 passed | Contract test output |
+| LIVE-CAPABILITIES | PASS | GET `/api/grimmlink/v1/capabilities` | 200 without auth | 200 | Production smoke output |
+| LIVE-AUTH-MISSING | PASS | GET `/api/grimmlink/v1/auth` without credentials | 401 | 401 | Production smoke output |
+| LIVE-HEALTHCHECK | PASS | GET `/healthcheck` | 200 with `status=ok` | 200/status=ok | Production smoke output |
 | SHELF-DOWNLOAD | PASS | Shelves listing and download E2E | Shelf contents and downloaded files behave correctly | Operator-confirmed PASS | Current E2E operator result |
 | SHELF-MUTATION-CLEANUP | PASS | Shelf mutation and cleanup E2E | Mutation and cleanup rules behave correctly | Operator-confirmed PASS | Current E2E operator result |
 

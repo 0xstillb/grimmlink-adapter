@@ -34,13 +34,13 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 2. Automated quality gate
 
-- [ ] `pytest` ผ่านทั้งหมด
-- [ ] Ruff ผ่าน
-- [ ] mypy ผ่าน
-- [ ] `git diff --check` ผ่าน
-- [ ] healthcheck integration test ผ่าน
-- [ ] contract/OpenAPI freeze tests ผ่าน
-- [ ] บันทึก warnings แยกจาก failures
+- [x] `pytest` ผ่านทั้งหมด
+- [x] Ruff ผ่าน
+- [x] mypy ผ่าน
+- [x] `git diff --check` ผ่าน
+- [x] healthcheck integration test ผ่าน
+- [x] contract/OpenAPI freeze tests ผ่าน
+- [x] บันทึก warnings แยกจาก failures
 
 ## 3. Authentication และ account isolation
 
@@ -56,11 +56,11 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 4. Capabilities และ legacy contract
 
-- [ ] `GET /api/grimmlink/v1/syncs/capabilities` ใช้งานได้โดยไม่ต้อง auth
+- [x] `GET /api/grimmlink/v1/capabilities` ใช้งานได้โดยไม่ต้อง auth
 - [ ] protected routes ทั้งหมดปฏิเสธ request ที่ไม่มี credential
-- [ ] request/response keys ตรง legacy GrimmLink contract
-- [ ] error shape ไม่ทำให้ plugin crash
-- [ ] array/object response variants ที่ Official ใช้จริงถูก normalize ถูกต้อง
+- [x] request/response keys ตรง legacy GrimmLink contract
+- [x] error shape ไม่ทำให้ plugin crash
+- [x] array/object response variants ที่ Official ใช้จริงถูก normalize ถูกต้อง
 
 ## 5. Book identity และ hash safety
 
