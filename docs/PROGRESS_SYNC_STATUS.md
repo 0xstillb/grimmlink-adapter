@@ -149,6 +149,7 @@
 **ผลทดสอบ**
 
 - operator-confirmed: KOReader ↔ KOReader PDF sync และ Jump ผ่าน
+- operator-confirmed: PDF Web Reader ↔ KOReader sync และ Jump ผ่าน
 - Adapter production health หลัง deploy เป็น `healthy`, restart `0`
 
 ## Known issue ที่ยังไม่ได้แก้
@@ -266,6 +267,7 @@ XPointer string อย่างเดียวไม่น่าเชื่อ�
 - [x] PDF Pull ผ่าน
 - [x] PDF Jump/Continue Read ผ่าน
 - [x] Operator-confirmed: KOReader ↔ KOReader PDF sync/Jump ผ่านหลัง Adapter response normalization
+- [x] Operator-confirmed: PDF Web Reader ↔ KOReader sync/Jump ผ่าน
 - [x] PDF อ่านหน้าแรกแล้วขึ้น `READING`
 - [x] EPUB เปิดหนังสือได้
 - [x] EPUB อ่านตำแหน่งแรกแล้วขึ้น `READING`
