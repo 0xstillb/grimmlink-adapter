@@ -105,6 +105,7 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 8. PDF/fixed-page progress
 
+- [x] Operator-confirmed: KOReader ↔ KOReader PDF sync และ Jump ผ่านหลัง Adapter response normalization (`10342cc`)
 - [ ] Push current page และ percentage ผ่าน native route
 - [ ] Pull กลับได้ page/percentage เดิม
 - [ ] Device A → Device B ไปหน้าถูกต้อง

@@ -123,6 +123,34 @@
 
 - `9d9a2f3` — preserve EPUB identity on native pull
 
+### 7. PDF Pull response ต่างจาก Grimmory fork ทำให้ Jump ไม่ทำงาน
+
+**อาการ**
+
+- Grimmory fork + GrimmLink plugin เดิม Jump PDF ได้ถูกต้อง
+- Official native DTO ที่ Adapter ส่งผ่านแบบ raw มี `percentage` เป็น fraction
+  และมักไม่มี `currentPage`, `fileFormat`, `bookId` และ `bookFileId`
+- Plugin จึงได้รับ response contract ไม่เหมือน fork
+
+**การแก้**
+
+- คง Official native endpoint เป็น upstream transport สำหรับ MD5
+- Adapter normalize GET response เป็น GrimmLink/fork-compatible DTO
+- แปลง Official fraction เป็น display percentage
+- derive `currentPage` จาก numeric PDF `progress` โดยไม่ใช้ percentage เป็น page
+- native PUT เข้า Official ยังคงใช้ fraction semantics เดิม
+
+**Commit/image**
+
+- `4ffc45e` — return fork-compatible PDF pull progress
+- `10342cc` — freeze normalized native progress response
+- image digest: `sha256:5b223a761a0de16954b162ae039e9c1ab134502d366fc25f848f4a35ee145960`
+
+**ผลทดสอบ**
+
+- operator-confirmed: KOReader ↔ KOReader PDF sync และ Jump ผ่าน
+- Adapter production health หลัง deploy เป็น `healthy`, restart `0`
+
 ## Known issue ที่ยังไม่ได้แก้
 
 ### Official XPointer → EPUB CFI conversion ล้มเหลวบางตำแหน่ง
@@ -225,8 +253,8 @@ XPointer string อย่างเดียวไม่น่าเชื่อ�
 
 ### Automated tests
 
-- [x] Full pytest: `298 passed`
-- [x] Progress normalization targeted tests: `19 passed`
+- [x] Full pytest: `300 passed`
+- [x] Progress normalization targeted tests: `21 passed`
 - [x] Ruff: passed
 - [x] mypy: `Success: no issues found in 49 source files`
 - [x] `git diff --check`: passed
@@ -237,6 +265,7 @@ XPointer string อย่างเดียวไม่น่าเชื่อ�
 - [x] PDF Push ผ่าน native endpoint
 - [x] PDF Pull ผ่าน
 - [x] PDF Jump/Continue Read ผ่าน
+- [x] Operator-confirmed: KOReader ↔ KOReader PDF sync/Jump ผ่านหลัง Adapter response normalization
 - [x] PDF อ่านหน้าแรกแล้วขึ้น `READING`
 - [x] EPUB เปิดหนังสือได้
 - [x] EPUB อ่านตำแหน่งแรกแล้วขึ้น `READING`
