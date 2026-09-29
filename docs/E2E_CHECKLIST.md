@@ -42,6 +42,15 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 - [x] contract/OpenAPI freeze tests ผ่าน
 - [x] บันทึก warnings แยกจาก failures
 
+**Adapter-side targeted evidence**
+
+- [x] Identity/hash/auth/security suites: `56 passed`
+- [x] Reading-session suites: `44 passed` และมี 1 deprecation warning แยกจาก failure
+- [x] OPF parser/ingestion/metadata suites: `34 passed`
+- [x] Legacy contract suite: `50 passed`
+- [x] Full suite รวมล่าสุด: `300 passed`
+- [x] Ruff, mypy และ `git diff --check` ผ่านหลังผลชุดล่าสุด
+
 ## 3. Authentication และ account isolation
 
 - [ ] MD5 authentication สำเร็จด้วย test user
