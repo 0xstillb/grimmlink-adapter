@@ -182,7 +182,8 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 13. Reading sessions
 
-- [ ] single session ถูกสร้างด้วยเวลา/duration/progress ที่ถูกต้อง
+- [x] Operator-confirmed: single EPUB reading session บันทึกสำเร็จ (`4s`, progress `0.051% → 0.051%`)
+- [x] single session ถูกสร้างด้วยเวลา/duration/progress ที่ถูกต้อง
 - [ ] batch fanout และ aggregate counts ถูกต้อง
 - [ ] invalid item ใน batch ไม่ยกเลิกรายการ valid อื่น
 - [ ] duplicate retry ไม่ POST upstream ซ้ำ
