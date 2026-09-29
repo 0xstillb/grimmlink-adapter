@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     )
     GRIMMLINK_NATIVE_PROGRESS_PROXY: bool = Field(
         default=False,
-        description="Return Official KOReader progress response without DTO translation",
+        description="Use Official native KOReader progress transport with normalized GrimmLink DTO output",
     )
     GRIMMLINK_MINIMAL_IDENTITY_RESPONSE: bool = Field(
         default=False,

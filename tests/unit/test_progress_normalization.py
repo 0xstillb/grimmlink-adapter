@@ -1,10 +1,14 @@
 """Session 06 progress normalization and conflict coverage."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
+from grimmlink_adapter.api import progress as progress_api
+from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.grimmlink import KoreaderProgressPayload
 from grimmlink_adapter.models.internal import ProgressSnapshot
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
@@ -73,6 +77,31 @@ def test_official_pdf_native_progress_derives_fork_page_field() -> None:
     assert snapshot.current_page == 12
     assert snapshot.display_percent == pytest.approx(1.81)
     assert snapshot.native_location == "12"
+
+
+@pytest.mark.asyncio
+async def test_native_progress_proxy_returns_normalized_fork_payload() -> None:
+    normalized = KoreaderProgressPayload(
+        document="pdf-hash",
+        bookHash="pdf-hash",
+        bookId=25,
+        bookFileId=25,
+        fileFormat="PDF",
+        percentage=1.81,
+        progress="12",
+        currentPage=12,
+    )
+    with patch.object(settings, "GRIMMLINK_NATIVE_PROGRESS_PROXY", True), patch.object(
+        progress_api._progress_service,
+        "get_progress",
+        new=AsyncMock(return_value=normalized),
+    ) as get_progress:
+        response = await progress_api.get_progress("pdf-hash", CREDS)
+
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 200
+    assert json.loads(bytes(response.body)) == normalized.model_dump(by_alias=True, exclude_none=True)
+    get_progress.assert_awaited_once_with("pdf-hash", CREDS)
 
 
 @pytest.mark.asyncio
