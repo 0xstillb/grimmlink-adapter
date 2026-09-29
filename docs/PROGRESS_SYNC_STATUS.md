@@ -148,17 +148,78 @@ Error: Cannot find child h3[1]
 - ยังไม่ได้แก้ที่ Official `CfiConverter`/`EpubCfiService`
 - ยังไม่ได้ทำ Adapter-side EPUB parser/CFI shim
 - chapter-level fallback เป็นเพียงแนวทางที่เสนอ ยังไม่ถือว่า implemented
+- GrimmLink plugin ยังส่งเฉพาะ KOReader-native XPointer; ยังไม่มี
+  `webLocator` สำหรับช่วยสร้าง CFI
 - ห้ามรายงานว่า Web Reader sync ตรงจาก HTTP `200` เพียงอย่างเดียว
 
-**แนวทางแก้ที่ยังต้องทำ**
+**สาเหตุเชิงสถาปัตยกรรม**
+
+- KOReader/crengine ใช้ XPointer จาก DOM ภายในของตัวเองเพื่อ sync ระหว่าง
+  KOReader devices
+- Official Web Reader ใช้ `epubProgress.cfi` จาก App progress projection
+- Official native progress endpoint บันทึก XPointer/percentage ใหม่ได้แม้การแปลง
+  XPointer เป็น CFI จะล้มเหลว
+- เมื่อการแปลงล้มเหลว native Pull จึงเห็นตำแหน่งใหม่ แต่ Web Reader ยังคงใช้ CFI
+  เก่า โดยเฉพาะเมื่อผู้ใช้อ่านย้อนกลับไปบทก่อนหน้า
+
+**แนวทางแก้ที่เสนอโดยไม่แก้ Official — ยังไม่ implemented**
+
+รักษา XPointer เป็น authoritative position สำหรับ KOReader เหมือนเดิม และเพิ่ม
+Web Reader projection แบบ best-effort แยกต่างหาก:
+
+1. GrimmLink plugin ส่ง XPointer/percentage เดิมโดยไม่เปลี่ยน semantics
+2. Plugin เพิ่ม optional `webLocator` ที่สกัดขณะ EPUB เปิดอยู่ เช่น:
+
+   ```json
+   {
+     "fragmentIndex": 75,
+     "sourceHref": "OEBPS/Text/chapter-12.xhtml",
+     "textBefore": "short context before the position",
+     "text": "text at the current position",
+     "textAfter": "short context after the position",
+     "offset": 0
+   }
+   ```
+
+   `sourceHref` และ text context เป็น optional; payload ต้องจำกัดขนาดและห้ามส่ง
+   HTML ทั้งบท ข้อมูลนี้เป็น locator ช่วยแปลง ไม่ใช่ source of truth แทน XPointer
+3. Adapter resolve `bookHash` ไปยัง book/file ที่ verified แล้ว และอ่าน EPUB
+   แบบ read-only เท่านั้น ห้ามแก้ source ebook
+4. Adapter map `DocFragment[n]`/`sourceHref` ไปยัง OPF spine และสร้าง CFI ด้วย
+   progressive fallback:
+   - exact DOM/text-offset match
+   - text-anchor หรือ parent paragraph/heading match
+   - chapter-start CFI จาก spine item
+5. Adapter ส่งผลผ่าน Official App progress endpoint
+   `PUT /api/v1/app/books/{bookId}/progress` โดยใช้ `epubProgress.cfi`, `href`
+   และ percentage
+6. หาก Web projection ล้มเหลว ต้องไม่ rollback หรือเปลี่ยนผล native KOReader
+   sync, ต้องไม่แทน XPointer ด้วย CFI และต้องไม่เขียน CFI ที่ตรวจสอบไม่ได้ทับค่าเดิม
+
+ทางเลือก Adapter-only ที่ไม่มี `webLocator` สามารถทำ chapter-level fallback จาก
+`DocFragment[n]` และ EPUB spine ได้ แต่การแปลงให้ตรงระดับ paragraph/character จาก
+XPointer string อย่างเดียวไม่น่าเชื่อถือ เพราะ crengine DOM อาจต่างจาก raw EPUB DOM
+
+**สถานะ implementation ณ baseline นี้**
+
+- [ ] ยังไม่ได้เปลี่ยน GrimmLink wire payload หรือ plugin
+- [ ] ยังไม่ได้เพิ่ม `webLocator` model/validation ใน Adapter
+- [ ] ยังไม่ได้เพิ่ม verified EPUB reader หรือ XPointer/locator → CFI converter
+- [ ] ยังไม่ได้ mirror EPUB CFI ผ่าน Official App progress endpoint
+- [ ] ยังไม่ได้เพิ่ม chapter-level fallback
+- [ ] ยังไม่ได้ทำ Web Reader E2E สำหรับการอ่านย้อนกลับไปบทก่อนหน้า
+
+**งานและ acceptance criteria ที่ยังต้องทำ**
 
 1. เพิ่ม regression fixture EPUB ที่ทำให้ XPointer conversion ล้มเหลว
-2. เปรียบเทียบ XPointer, CFI ที่ Official สร้าง, native progress และ Web Reader CFI
-3. เลือกหนึ่งแนวทาง:
-   - แก้ Official converter ให้รองรับ DOM/XPointer ที่ KOReader ส่งจริง
-   - ทำ Adapter-side XPointer → CFI converter โดยอ่าน EPUB ที่ verified แล้ว
-   - ใช้ chapter-level fallback โดยประกาศชัดว่าไม่ละเอียดถึง paragraph
-4. ทดสอบ Web Reader หลังแก้จริง ไม่สรุปจาก native Pull อย่างเดียว
+2. เพิ่ม plugin tests ว่า locator extraction ล้มเหลวได้โดยไม่ทำให้ native Push ล้ม
+3. เพิ่ม Adapter tests สำหรับ hash/file mismatch, malformed EPUB, ambiguous text,
+   duplicate text, invalid CFI, path traversal และ oversized locator payload
+4. พิสูจน์ว่า KOReader device A → device B ยังได้ XPointer เดิมทุกกรณี
+5. พิสูจน์ว่า Web Reader ย้อนกลับไปบทเก่าตาม KOReader Push อย่างน้อยระดับบท
+6. สำหรับ exact match ให้พิสูจน์ตำแหน่งระดับ paragraph/text offset กับ fixture จริง;
+   หากทำไม่ได้ต้อง fallback อย่างชัดเจนและห้ามรายงานเป็น exact
+7. ทดสอบ Web Reader หลังแก้จริง ไม่สรุปจาก native Pull หรือ HTTP `200` อย่างเดียว
 
 ## Test และ verification checklist
 
