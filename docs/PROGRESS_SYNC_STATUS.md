@@ -152,9 +152,16 @@
 - operator-confirmed: PDF Web Reader ↔ KOReader sync และ Jump ผ่าน
 - Adapter production health หลัง deploy เป็น `healthy`, restart `0`
 
-## Known issue ที่ยังไม่ได้แก้
+## Historical known issue / regression watch
 
 ### Official XPointer → EPUB CFI conversion ล้มเหลวบางตำแหน่ง
+
+**Current E2E status**
+
+- operator-confirmed: EPUB all surfaces ผ่าน รวม KOReader native Push/Pull,
+  Web Reader projection, Continue Read และ Jump
+- สถานะนี้เป็นผลจาก flow ปัจจุบันที่ทดสอบจริง; เก็บรายละเอียด converter เดิมไว้
+  เป็น regression watch ไม่รายงานเป็น failure ของ current E2E
 
 **หลักฐานที่พบ**
 
@@ -174,7 +181,7 @@ Error: Cannot find child h3[1]
 
 **สถานะ**
 
-- ยังไม่ได้แก้ที่ Official `CfiConverter`/`EpubCfiService`
+- source-level converter เดิมยังไม่ได้แก้ที่ Official `CfiConverter`/`EpubCfiService`
 - ยังไม่ได้ทำ Adapter-side EPUB parser/CFI shim
 - chapter-level fallback เป็นเพียงแนวทางที่เสนอ ยังไม่ถือว่า implemented
 - GrimmLink plugin ยังส่งเฉพาะ KOReader-native XPointer; ยังไม่มี
@@ -272,6 +279,7 @@ XPointer string อย่างเดียวไม่น่าเชื่อ�
 - [x] EPUB เปิดหนังสือได้
 - [x] EPUB อ่านตำแหน่งแรกแล้วขึ้น `READING`
 - [x] EPUB native Pull รับ XPointer กลับได้
+- [x] Operator-confirmed: EPUB all surfaces / Web Reader ↔ KOReader ผ่าน
 - [x] เปิด Tracking ไว้ระหว่างทดสอบ
 - [x] Adapter production health เป็น `healthy`
 - [x] ตรวจ log ให้สัมพันธ์กับเวลาทดสอบ

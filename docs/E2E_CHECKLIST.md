@@ -92,6 +92,7 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 7. EPUB Web Reader projection — known issue
 
+- [x] Operator-confirmed: EPUB all surfaces ผ่าน รวม Web Reader ↔ KOReader, Pull/Jump และ Continue Read
 - [ ] บันทึก baseline เมื่อ XPointer → CFI conversion สำเร็จ
 - [ ] บันทึก fixture/log เมื่อ conversion ล้มเหลว
 - [ ] ยืนยันว่า native XPointer เปลี่ยนแม้ Web Reader CFI ค้าง
