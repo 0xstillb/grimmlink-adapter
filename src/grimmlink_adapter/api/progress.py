@@ -19,7 +19,12 @@ async def get_progress(
 ) -> Response | KoreaderProgressPayload:
     """Retrieve reading progress for a given book hash."""
     if settings.GRIMMLINK_NATIVE_PROGRESS_PROXY and creds.username and creds.md5_key and not creds.bearer_token:
-        return JSONResponse(content=await _progress_service.get_native_progress(book_hash, creds))
+        # Keep Official's native endpoint as the upstream transport, but return
+        # the normalized GrimmLink/fork-compatible DTO to the plugin.  Returning
+        # Official's raw fraction-only DTO here omits fixed-page identity fields
+        # and makes Pull Remote behave differently from the fork.
+        normalized = await _progress_service.get_progress(book_hash, creds)
+        return JSONResponse(content=normalized.model_dump(by_alias=True, exclude_none=True))
     return await _progress_service.get_progress(book_hash, creds)
 
 

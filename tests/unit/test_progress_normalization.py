@@ -12,6 +12,7 @@ from grimmlink_adapter.services.progress_service import (
     ProgressService,
     official_fraction_to_display_percent,
     snapshot_from_grimmlink,
+    snapshot_from_official,
 )
 from grimmlink_adapter.services.request_auth import VerifiedBearer
 from grimmlink_adapter.state.cache import ProgressStateCache
@@ -56,6 +57,22 @@ def test_pdf_projection_preserves_pages_and_percent() -> None:
     assert snapshot.total_pages == 250
     assert snapshot.display_percent == 22.0
     assert snapshot.official_fraction == 0.22
+
+
+def test_official_pdf_native_progress_derives_fork_page_field() -> None:
+    snapshot = snapshot_from_official(
+        {
+            "document": "pdf-hash",
+            "progress": "12",
+            "percentage": 0.0181,
+            "timestamp": 100,
+        },
+        "pdf-hash",
+    )
+    assert snapshot is not None
+    assert snapshot.current_page == 12
+    assert snapshot.display_percent == pytest.approx(1.81)
+    assert snapshot.native_location == "12"
 
 
 @pytest.mark.asyncio

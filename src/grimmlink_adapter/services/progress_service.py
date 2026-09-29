@@ -186,6 +186,12 @@ def snapshot_from_official(payload: dict[str, Any], requested_hash: str) -> Prog
     raw_total_pages = payload["totalPages"] if "totalPages" in payload else payload.get("total_pages")
     current_page = _page(raw_current_page)
     total_pages = _page(raw_total_pages)
+    # Stock Official's native DTO commonly omits currentPage for PDF while
+    # preserving the KOReader page in numeric progress.  The fork exposes that
+    # page explicitly, so derive it at the adapter boundary without ever using
+    # the percentage fraction as a page number.
+    if current_page is None and not reflowable:
+        current_page = _page(native)
     if current_page is not None and total_pages is not None and total_pages > 0:
         display_percent: float | None = calculate_display_percentage(current_page, total_pages)
     else:
