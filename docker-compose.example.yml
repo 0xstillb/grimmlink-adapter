@@ -6,18 +6,43 @@ services:
     container_name: grimmlink-adapter
     restart: unless-stopped
     ports:
-      - "8085:8085"
+      # Publish only on the Pi's LAN interface, not on every host interface.
+      # Still block Internet forwarding to this port in the host/router firewall.
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP to the Pi's LAN IPv4}:8085:8085"
     environment:
       - ADAPTER_HOST=0.0.0.0
       - ADAPTER_PORT=8085
       - GRIMMORY_BASE_URL=http://grimmory:6060
+      # Required for first-time hash lookup on stock Grimmory unless the
+      # Adapter already has a verified mapping. Use a dedicated SELECT-only DB
+      # account; paste the generated values into Compose's .env.
+      - GRIMMORY_DB_ENABLED=${GRIMMORY_DB_ENABLED:-false}
+      - GRIMMORY_DB_HOST=${GRIMMORY_DB_HOST:-}
+      - GRIMMORY_DB_PORT=${GRIMMORY_DB_PORT:-3306}
+      - GRIMMORY_DB_NAME=${GRIMMORY_DB_NAME:-grimmory}
+      - GRIMMORY_DB_USER=${GRIMMORY_DB_USER:-}
+      - GRIMMORY_DB_PASSWORD=${GRIMMORY_DB_PASSWORD:-}
+      - GRIMMORY_DB_SSL_CA=${GRIMMORY_DB_SSL_CA:-}
       - SQLITE_DB_PATH=/app/data/grimmlink_adapter.db
       - MIGRATIONS_DIR=/app/migrations
       - LOG_LEVEL=INFO
       - OFFICIAL_CLIENT_TIMEOUT=15.0
       - OFFICIAL_CLIENT_MAX_RETRIES=3
+      - MDNS_ENABLED=true
+      # Match the host address bound above so grimmlink.local resolves to the LAN UI.
+      - MDNS_IPV4=${LAN_BIND_IP}
+      - METADATA_IMPORT_ROOTS=${METADATA_IMPORT_ROOTS:-["/imports"]}
+      - METADATA_WORKER_ENABLED=true
+      - METADATA_KEY_FILE=/app/data/grimmlink_adapter.metadata.key
     volumes:
       - adapter_data:/app/data
+      # Existing NAS mount on the Pi4. Do not create an empty host path if missing.
+      - type: bind
+        source: ${NAS_BOOKS_ROOT:?Set NAS_BOOKS_ROOT to the existing Pi4 NAS mount}
+        target: /imports
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - grimmory_network
     depends_on:
@@ -29,12 +54,17 @@ services:
     container_name: grimmory
     restart: unless-stopped
     ports:
-      - "6060:6060"
+      # Optional web/API access, bound to LAN only; the Adapter uses container DNS.
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP to the Pi's LAN IPv4}:6060:6060"
     environment:
       - PORT=6060
     volumes:
       - grimmory_data:/app/data
-      - grimmory_books:/books
+      - type: bind
+        source: ${NAS_BOOKS_ROOT:?Set NAS_BOOKS_ROOT to the existing Pi4 NAS mount}
+        target: /books
+        bind:
+          create_host_path: false
     networks:
       - grimmory_network
 
@@ -42,8 +72,6 @@ volumes:
   adapter_data:
     driver: local
   grimmory_data:
-    driver: local
-  grimmory_books:
     driver: local
 
 networks:

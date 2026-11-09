@@ -150,20 +150,21 @@ async def test_object_endpoint_still_rejects_json_array() -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_progress_and_manual_status_use_official_schemas() -> None:
+async def test_book_progress_and_manual_status_use_official_schemas() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer verified"
         if request.method == "GET":
-            assert request.url.path == "/api/v1/app/books/42/progress"
+            assert request.url.path == "/api/v1/books/42"
             return httpx.Response(200, json={
                 "readProgress": 22.0,
                 "pdfProgress": {"page": 55, "percentage": 22.0},
                 "lastReadTime": "2026-09-27T12:00:00Z",
             })
-        if request.url.path == "/api/v1/app/books/42/progress":
-            assert request.method == "PUT"
+        if request.url.path == "/api/v1/books/progress":
+            assert request.method == "POST"
             assert json.loads(request.read()) == {
-                "pdfProgress": {"page": 55, "percentage": 22.0},
+                "bookId": 42,
+                "fileProgress": {"bookFileId": 43, "positionData": "55", "progressPercent": 22.0},
             }
             return httpx.Response(200)
         assert request.method == "POST"
@@ -177,10 +178,10 @@ async def test_app_progress_and_manual_status_use_official_schemas() -> None:
 
     mock_client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
     client = OfficialGrimmoryClient(client=mock_client)
-    progress = await client.get_app_book_progress(42, "verified")
+    progress = await client.get_book_by_id(42, "verified")
     assert progress["pdfProgress"]["page"] == 55
     assert await client.update_book_progress(
-        42, {"pdfProgress": {"page": 55, "percentage": 22.0}}, "verified",
+        42, {"fileProgress": {"bookFileId": 43, "positionData": "55", "progressPercent": 22.0}}, "verified",
     ) == {}
     statuses = await client.update_read_status(42, "READ", "verified")
     assert statuses[0]["readStatus"] == "READ"

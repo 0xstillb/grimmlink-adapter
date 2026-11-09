@@ -1,5 +1,7 @@
 # GrimmLink Progress Sync Status
 
+> **Historical implementation log.** This records the pre-v2 progress design and includes an older `/api/v1/app/**` proposal that is no longer the Adapter contract. For current v2 routes and upstream mapping, use [`ADAPTER_V2_SPEC.md`](./ADAPTER_V2_SPEC.md); confirm the target Grimmory build's OpenAPI before deployment.
+
 สถานะนี้บันทึกปัญหา การแก้ไข หลักฐานการทดสอบ และ known issues ของ
 `grimmlink-adapter` สำหรับ KOReader ↔ Grimmory Official
 

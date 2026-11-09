@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>GrimmLink · Library workspace</title>
+  <style>
+    @font-face {
+      font-family: "Noto Sans Thai";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local("Noto Sans Thai Regular"), local("NotoSansThai-Regular"), local("Noto Sans Thai");
+    }
+    @font-face {
+      font-family: "Noto Sans Thai";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: local("Noto Sans Thai SemiBold"), local("NotoSansThai-SemiBold");
+    }
+    @font-face {
+      font-family: "Noto Sans Thai";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: local("Noto Sans Thai Bold"), local("NotoSansThai-Bold");
+    }
+    :root {
+      color-scheme: dark;
+      font: 14.5px/1.8 "Noto Sans Thai", "Leelawadee UI", "Segoe UI", Tahoma, system-ui, sans-serif;
+      color: #f1ecff;
+      background: #0d0720;
+      -webkit-text-size-adjust: 100%;
+      text-rendering: optimizeLegibility;
+      --fs-2xs: 10.5px;
+      --fs-xs: 12px;
+      --fs-sm: 13px;
+      --fs-base: 14.5px;
+      --fs-md: 15px;
+      --fs-lg: 17px;
+      --fs-xl: 24px;
+      --lh-tight: 1.45;
+      --lh-snug: 1.55;
+      --lh-base: 1.8;
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --sp-5: 20px;
+      --sp-6: 24px;
+      --sp-7: 32px;
+      --sp-8: 40px;
+      --sp-9: 48px;
+      --bg: #0d0720;
+      --panel: rgba(42, 24, 84, .62);
+      --panel-2: rgba(52, 30, 100, .55);
+      --panel-solid: #241445;
+      --hairline: rgba(167, 139, 250, .16);
+      --hairline-2: rgba(167, 139, 250, .32);
+      --text: #f1ecff;
+      --text-strong: #ffffff;
+      --text-dim: #c3b5e8;
+      --text-faint: #9d8fc7;
+      --violet: #8b5cf6;
+      --violet-lite: #a78bfa;
+      --violet-deep: #7c3aed;
+      --fuchsia: #a855f7;
+      --cyan: #22d3ee;
+      --magenta: #ec4899;
+      --green: #10b981;
+      --green-lite: #34d399;
+      --yellow: #fbbf24;
+      --yellow-lite: #fcd34d;
+      --orange: #f97316;
+      --orange-lite: #fb923c;
+      --shadow: 0 26px 60px rgba(4, 1, 16, .62);
+      --shadow-soft: 0 16px 38px rgba(4, 1, 16, .48);
+      --shadow-xs: 0 8px 20px rgba(4, 1, 16, .40);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      position: relative;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      background:
+        radial-gradient(1250px 720px at 10% -10%, rgba(139, 92, 246, .46), transparent 62%),
+        radial-gradient(950px 620px at 98% 2%, rgba(236, 72, 153, .24), transparent 62%),
+        radial-gradient(1050px 760px at 58% 112%, rgba(34, 211, 238, .18), transparent 60%),
+        linear-gradient(180deg, #170d34 0%, #0d0720 58%, #090418 100%);
+      background-attachment: fixed;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(167, 139, 250, .05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(167, 139, 250, .05) 1px, transparent 1px);
+      background-size: 54px 54px;
+      -webkit-mask-image: radial-gradient(1300px 780px at 28% 0%, #000 18%, transparent 76%);
+      mask-image: radial-gradient(1300px 780px at 28% 0%, #000 18%, transparent 76%);
+    }
+    [hidden] { display: none !important; }
+    button, input, select { font: inherit; }
+    svg {
+      width: 20px; height: 20px; fill: none; stroke: currentColor;
+      stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0;
+    }
+    button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+    a { color: var(--violet-lite); transition: color .16s ease; }
+    a:hover { color: #d8ccff; }
+    button, a, summary { touch-action: manipulation; }
+    ::selection { background: rgba(168, 85, 247, .45); color: #fff; }
+    * { scrollbar-width: thin; scrollbar-color: #4a2f8f transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #432a83; border: 3px solid transparent; background-clip: content-box; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: #5b3bb0; background-clip: content-box; }
+    :focus-visible { outline: 2px solid var(--violet-lite); outline-offset: 3px; border-radius: 6px; }
+    [id] { scroll-margin-top: 96px; }
+
+    .skip {
+      position: fixed; top: -70px; left: 20px; z-index: 40;
+      padding: 11px 18px; border-radius: 12px; text-decoration: none; font-weight: 600;
+      background: linear-gradient(135deg, #8b5cf6, #a855f7); color: #fff;
+      box-shadow: 0 12px 30px rgba(139, 92, 246, .5);
+    }
+    .skip:focus { top: 14px; }
+
+    /* ================= Sidebar ================= */
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; width: 262px; z-index: 3;
+      padding: 30px 18px 18px;
+      background: linear-gradient(180deg, rgba(47, 26, 92, .92) 0%, rgba(30, 16, 62, .94) 55%, rgba(21, 11, 44, .96) 100%);
+      border-right: 1px solid var(--hairline);
+      backdrop-filter: blur(16px);
+      display: flex; flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 13px; text-decoration: none; color: var(--text-strong); }
+    .brand:hover { color: var(--text-strong); }
+    .brand-mark {
+      width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center;
+      background: linear-gradient(135deg, #7c3aed 0%, #a855f7 52%, #ec4899 100%);
+      color: #fff;
+      box-shadow: 0 12px 28px rgba(139, 92, 246, .5), inset 0 1px 0 rgba(255, 255, 255, .3);
+    }
+    .brand-mark svg { width: 21px; height: 21px; stroke-width: 1.9; }
+    .brand strong { display: block; font-size: 21px; line-height: 1.35; letter-spacing: -.3px; color: var(--text-strong); }
+    .brand small { display: block; color: #8f7fc0; font-size: 9.5px; line-height: 1.5; letter-spacing: 1.5px; white-space: nowrap; text-transform: uppercase; }
+    .nav-label {
+      font-size: 9.5px; font-weight: 700; color: #7b6aa8; letter-spacing: 1.8px; line-height: 1.6;
+      margin: var(--sp-9) 12px var(--sp-3); text-transform: uppercase;
+    }
+    nav { display: grid; gap: 6px; }
+    nav a {
+      position: relative;
+      display: flex; gap: 13px; align-items: center; padding: 12px 14px; border-radius: 13px;
+      text-decoration: none; color: var(--text-dim); font-weight: 600; font-size: var(--fs-md); line-height: var(--lh-snug);
+      border: 1px solid transparent;
+      transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+    }
+    nav a:hover {
+      background: rgba(167, 139, 250, .12); color: var(--text-strong);
+      border-color: rgba(167, 139, 250, .22); transform: translateX(2px);
+    }
+    nav a[aria-current="page"] {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      color: #fff; border-color: rgba(255, 255, 255, .18);
+      box-shadow: 0 12px 28px rgba(124, 58, 237, .48), inset 0 1px 0 rgba(255, 255, 255, .26);
+    }
+    nav a[aria-current="page"] svg { color: #fff; }
+    .nav-number {
+      margin-left: auto; font-size: var(--fs-2xs); font-weight: 700; color: #7f6fb5;
+      line-height: 1.5; letter-spacing: .5px; font-variant-numeric: tabular-nums;
+    }
+    nav a[aria-current="page"] .nav-number { color: rgba(255, 255, 255, .85); }
+    .sidebar-bottom { margin-top: auto; }
+    .reader-note { border-top: 1px solid var(--hairline); padding: var(--sp-5) 12px; color: var(--text-faint); font-size: var(--fs-xs); line-height: var(--lh-base); }
+    .reader-note strong { display: block; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+    .connection {
+      display: flex; gap: 11px; align-items: center; padding: 12px 14px; border-radius: 14px; font-size: var(--fs-xs); line-height: var(--lh-snug);
+      background: linear-gradient(135deg, rgba(139, 92, 246, .22), rgba(236, 72, 153, .14));
+      border: 1px solid rgba(167, 139, 250, .26);
+    }
+    .dot { width: 8px; height: 8px; background: #5b4a86; border-radius: 50%; flex-shrink: 0; }
+    .dot.connected { background: var(--green-lite); animation: pulse 2.8s ease-out infinite; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .5); }
+      70% { box-shadow: 0 0 0 9px rgba(52, 211, 153, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+    }
+    .connection small { display: block; color: var(--text-faint); font-size: var(--fs-2xs); line-height: 1.6; }
+
+    /* ================= Shell / topbar ================= */
+    .shell { margin-left: 262px; position: relative; z-index: 1; }
+    .topbar {
+      position: sticky; top: 0; z-index: 6;
+      height: 70px; padding: 0 46px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--hairline); font-size: var(--fs-xs); line-height: var(--lh-snug); color: var(--text-faint);
+      background: rgba(13, 7, 32, .62); backdrop-filter: blur(20px) saturate(150%);
+    }
+    .breadcrumb { display: flex; align-items: center; gap: 10px; }
+    .breadcrumb span:first-of-type { font-size: 0; }
+    .breadcrumb span:first-of-type::after {
+      content: ""; display: inline-block; width: 4px; height: 4px; border-radius: 50%;
+      background: #6a56a0; vertical-align: middle;
+    }
+    .breadcrumb span:last-child { color: var(--text-strong); font-weight: 600; letter-spacing: 0; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 7px 15px; border-radius: 99px;
+      background: rgba(255, 255, 255, .06); border: 1px solid rgba(167, 139, 250, .26);
+      color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 700; line-height: 1.6;
+      white-space: nowrap; letter-spacing: 1px; text-transform: uppercase;
+    }
+    .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--violet-lite); box-shadow: 0 0 8px rgba(167, 139, 250, .9); }
+
+    /* ================= Page content ================= */
+    main { max-width: 1200px; padding: var(--sp-9) var(--sp-9) var(--sp-8); margin: auto; }
+    .eyebrow {
+      display: flex; align-items: center; gap: 10px; margin: 0 0 var(--sp-3);
+      color: var(--violet-lite); font-size: var(--fs-2xs); font-weight: 700;
+      letter-spacing: 1.8px; line-height: 1.6; text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: ""; width: 22px; height: 2px; border-radius: 2px; flex-shrink: 0;
+      background: linear-gradient(90deg, var(--violet-lite), var(--magenta));
+      box-shadow: 0 0 10px rgba(167, 139, 250, .7);
+    }
+    h1 {
+      font-size: clamp(30px, 3.1vw, 38px); font-weight: 700; letter-spacing: -.3px;
+      line-height: var(--lh-tight); margin: 0 0 var(--sp-3); color: var(--text-strong);
+      text-wrap: balance;
+    }
+    h2 { font-size: var(--fs-lg); line-height: var(--lh-snug); margin: 0 0 var(--sp-1); font-weight: 600; letter-spacing: -.1px; color: var(--text-strong); text-wrap: balance; }
+    h3 { font-size: var(--fs-md); line-height: var(--lh-snug); margin: 0; font-weight: 600; color: var(--text-strong); text-wrap: balance; }
+    p { margin: 0 0 var(--sp-3); line-height: var(--lh-base); text-wrap: pretty; }
+    .muted, .subtitle { color: var(--text-dim); }
+    .subtitle { max-width: 640px; margin-bottom: var(--sp-7); font-size: var(--fs-base); line-height: var(--lh-base); text-wrap: pretty; }
+    .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+
+    /* ================= Gradient stat strip (ref-style) ================= */
+    .step-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-5); margin-bottom: var(--sp-8); }
+    .step-strip a {
+      position: relative; overflow: hidden;
+      padding: var(--sp-5) var(--sp-5); display: flex; gap: 14px; align-items: center;
+      text-decoration: none; font-size: var(--fs-md); font-weight: 600; line-height: var(--lh-snug); color: #fff;
+      border-radius: 20px; border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 18px 40px rgba(4, 1, 16, .5), inset 0 1px 0 rgba(255, 255, 255, .26);
+      transition: transform .22s ease, box-shadow .22s ease;
+    }
+    .step-strip a::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(150px 70px at 82% -14%, rgba(255, 255, 255, .34), transparent 70%);
+    }
+    .step-strip a:hover { transform: translateY(-3px); box-shadow: 0 24px 52px rgba(4, 1, 16, .58), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    .step-strip a:nth-child(1) { background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 52%, #c084fc 100%); box-shadow: 0 18px 40px rgba(109, 40, 217, .42), inset 0 1px 0 rgba(255, 255, 255, .26); }
+    .step-strip a:nth-child(2) { background: linear-gradient(135deg, #0e7490 0%, #06b6d4 52%, #67e8f9 100%); box-shadow: 0 18px 40px rgba(6, 182, 212, .34), inset 0 1px 0 rgba(255, 255, 255, .26); }
+    .step-strip a:nth-child(3) { background: linear-gradient(135deg, #be185d 0%, #db2777 52%, #f472b6 100%); box-shadow: 0 18px 40px rgba(219, 39, 119, .34), inset 0 1px 0 rgba(255, 255, 255, .26); }
+    .step-strip a:not(:last-child)::after {
+      content: ""; position: absolute; top: 50%; right: -16px; width: 16px; height: 2px; z-index: 1;
+      background: linear-gradient(90deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, .06));
+    }
+    .step-circle {
+      width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+      font-size: var(--fs-sm); font-weight: 700; color: #fff; flex-shrink: 0;
+      background: rgba(255, 255, 255, .2); border: 1px solid rgba(255, 255, 255, .38);
+      font-variant-numeric: tabular-nums;
+    }
+    .step-circle.active {
+      background: rgba(255, 255, 255, .32); border-color: rgba(255, 255, 255, .62);
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, .12), 0 6px 16px rgba(0, 0, 0, .2);
+    }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 276px; gap: var(--sp-7); align-items: start; }
+    .stack { display: grid; gap: var(--sp-7); min-width: 0; }
+
+    /* ================= Panels ================= */
+    .card {
+      position: relative; overflow: hidden;
+      border: 1px solid var(--hairline); border-radius: 20px;
+      background: linear-gradient(180deg, rgba(44, 25, 88, .68), rgba(26, 14, 54, .76));
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, .05);
+      transition: border-color .25s ease, box-shadow .25s ease;
+    }
+    .card:hover { border-color: var(--hairline-2); box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .07); }
+    .card-header {
+      display: flex; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-6) var(--sp-7) var(--sp-5);
+      border-bottom: 1px solid var(--hairline);
+    }
+    .icon-box {
+      display: grid; place-items: center; color: #fff;
+      width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      border: 1px solid rgba(255, 255, 255, .2);
+      box-shadow: 0 10px 24px rgba(124, 58, 237, .48), inset 0 1px 0 rgba(255, 255, 255, .3);
+    }
+    .card-header p { font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--text-dim); margin: 2px 0 0; }
+    .card-body { padding: var(--sp-7); }
+    .card-footer {
+      background: rgba(0, 0, 0, .18); border-top: 1px solid var(--hairline);
+      padding: var(--sp-4) var(--sp-7); color: var(--text-faint); font-size: var(--fs-xs); line-height: var(--lh-base);
+    }
+
+    /* ================= Forms ================= */
+    label {
+      display: flex; align-items: center; gap: 8px; margin: 0 0 var(--sp-2);
+      font-weight: 600; font-size: var(--fs-xs); line-height: 1.6; letter-spacing: .2px; color: #cfc3f2;
+    }
+    label::before { content: ""; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; background: var(--violet-lite); }
+    input, select {
+      width: 100%; min-width: 0; min-height: 46px; padding: 11px 14px; font-size: var(--fs-base); line-height: 1.6;
+      border: 1px solid rgba(167, 139, 250, .22); border-radius: 12px;
+      background: rgba(10, 5, 26, .72); color: var(--text); outline-offset: 2px;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, .35);
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    input::placeholder { color: #7f71ab; font-size: var(--fs-sm); }
+    input:hover, select:hover { border-color: rgba(167, 139, 250, .42); }
+    input:focus, select:focus {
+      border-color: var(--fuchsia); background: rgba(14, 7, 34, .9);
+      box-shadow: 0 0 0 3px rgba(168, 85, 247, .28), inset 0 1px 3px rgba(0, 0, 0, .3);
+    }
+    input:disabled, select:disabled { background: rgba(12, 7, 30, .5); color: #6c5f94; cursor: not-allowed; box-shadow: none; }
+    option { background: #1d1140; color: var(--text); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+    .field { margin-bottom: var(--sp-6); }
+    .host-row { grid-template-columns: minmax(0, 1fr) 108px; }
+    .password-field { position: relative; }
+    .password-field input { padding-right: 66px; }
+    .password-field button {
+      position: absolute; right: 6px; top: 6px; min-height: 34px; padding: 4px 12px; font-size: var(--fs-xs); line-height: 1.5;
+      border: 1px solid rgba(167, 139, 250, .24); border-radius: 9px;
+      background: rgba(167, 139, 250, .12); color: var(--text-dim);
+      transition: background .16s ease, color .16s ease;
+    }
+    .password-field button:hover { background: rgba(167, 139, 250, .24); color: #fff; }
+
+    button, .button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border: 1px solid rgba(167, 139, 250, .26); border-radius: 13px; min-height: 42px; padding: 10px 18px;
+      background: rgba(255, 255, 255, .06); color: var(--text); cursor: pointer;
+      font-size: var(--fs-md); font-weight: 600; line-height: 1.5; letter-spacing: 0; text-decoration: none;
+      box-shadow: var(--shadow-xs), inset 0 1px 0 rgba(255, 255, 255, .07);
+      transition: transform .16s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    button:hover, .button:hover {
+      transform: translateY(-1px);
+      background: rgba(167, 139, 250, .18); border-color: rgba(167, 139, 250, .48); color: #fff;
+      box-shadow: 0 12px 26px rgba(4, 1, 16, .5), inset 0 1px 0 rgba(255, 255, 255, .1);
+    }
+    button:active, .button:active { transform: translateY(0); }
+    button.primary, .button.primary {
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      color: #fff; border-color: rgba(255, 255, 255, .2);
+      box-shadow: 0 12px 30px rgba(139, 92, 246, .48), inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+    button.primary:hover, .button.primary:hover {
+      background: linear-gradient(135deg, #8b5cf6, #c084fc); color: #fff; border-color: rgba(255, 255, 255, .3);
+      box-shadow: 0 16px 36px rgba(139, 92, 246, .6), inset 0 1px 0 rgba(255, 255, 255, .32);
+    }
+    button:disabled { opacity: .38; cursor: not-allowed; transform: none; box-shadow: none; }
+    button[aria-busy="true"] { cursor: progress; }
+
+    /* ================= Ref-style accent buttons ================= */
+    #copyDbConfig {
+      background: linear-gradient(135deg, #ea580c, #fbbf24); color: #2b1200;
+      border-color: rgba(255, 255, 255, .22);
+      box-shadow: 0 12px 30px rgba(234, 88, 12, .42), inset 0 1px 0 rgba(255, 255, 255, .35);
+    }
+    #copyDbConfig:hover { background: linear-gradient(135deg, #f97316, #fcd34d); color: #2b1200; border-color: rgba(255, 255, 255, .32); box-shadow: 0 16px 36px rgba(234, 88, 12, .52), inset 0 1px 0 rgba(255, 255, 255, .4); }
+    #runDiagnostics, #apply {
+      background: linear-gradient(135deg, #059669, #34d399); color: #02231a;
+      border-color: rgba(255, 255, 255, .22);
+      box-shadow: 0 12px 30px rgba(5, 150, 105, .42), inset 0 1px 0 rgba(255, 255, 255, .35);
+    }
+    #runDiagnostics:hover, #apply:hover { background: linear-gradient(135deg, #10b981, #6ee7b7); color: #02231a; border-color: rgba(255, 255, 255, .32); box-shadow: 0 16px 36px rgba(5, 150, 105, .52), inset 0 1px 0 rgba(255, 255, 255, .4); }
+    #scan {
+      background: linear-gradient(135deg, #d97706, #fcd34d); color: #2a1a00;
+      border-color: rgba(255, 255, 255, .22);
+      box-shadow: 0 12px 30px rgba(217, 119, 6, .38), inset 0 1px 0 rgba(255, 255, 255, .35);
+    }
+    #scan:hover { background: linear-gradient(135deg, #f59e0b, #fde68a); color: #2a1a00; border-color: rgba(255, 255, 255, .32); box-shadow: 0 16px 36px rgba(217, 119, 6, .48), inset 0 1px 0 rgba(255, 255, 255, .4); }
+    #logout { background: transparent; color: var(--text-faint); border-color: var(--hairline); box-shadow: none; }
+    #logout:hover { background: rgba(249, 115, 22, .16); color: var(--orange-lite); border-color: rgba(249, 115, 22, .45); box-shadow: none; }
+
+    .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); }
+    .actions .helper { margin: 0; }
+    .helper { color: var(--text-faint); font-size: var(--fs-xs); line-height: var(--lh-base); }
+    .feedback { font-size: var(--fs-sm); line-height: var(--lh-base); margin: var(--sp-4) 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .feedback:empty { display: none; }
+    .feedback[data-tone="error"] { color: var(--orange-lite); }
+    .feedback[data-tone="success"] { color: var(--green-lite); }
+
+    .note {
+      padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-6); font-size: var(--fs-sm); line-height: var(--lh-base);
+      border: 1px solid rgba(167, 139, 250, .26); border-left: 3px solid var(--violet-lite);
+      border-radius: 4px 13px 13px 4px; color: #cdc0f5;
+      background: linear-gradient(90deg, rgba(139, 92, 246, .20), rgba(139, 92, 246, .03));
+    }
+    .note strong { display: block; color: #e6ddff; margin-bottom: 5px; font-weight: 600; }
+
+    .aside-card {
+      padding: var(--sp-6) var(--sp-6); border: 1px solid var(--hairline); border-radius: 20px;
+      background: linear-gradient(180deg, rgba(50, 28, 98, .58), rgba(28, 15, 58, .72));
+      backdrop-filter: blur(14px); box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, .05);
+    }
+    .aside-card h3 { font-size: var(--fs-md); margin-bottom: var(--sp-3); }
+    .aside-card p, .aside-card li { font-size: var(--fs-sm); color: var(--text-dim); line-height: var(--lh-base); }
+    .aside-card .eyebrow { font-size: 9px; letter-spacing: 1.6px; margin-bottom: 12px; }
+    .aside-card .eyebrow::before { width: 14px; }
+    .aside-card ol { list-style: none; counter-reset: step; padding: 0; margin: var(--sp-5) 0 0; }
+    .aside-card li { position: relative; padding-left: 38px; margin-bottom: var(--sp-4); }
+    .aside-card li:last-child { margin-bottom: 0; }
+    .aside-card li::before {
+      counter-increment: step; content: counter(step);
+      position: absolute; left: 0; top: 1px; width: 25px; height: 25px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: #fff;
+      background: linear-gradient(135deg, #7c3aed, #a855f7);
+      border: 1px solid rgba(255, 255, 255, .2);
+      box-shadow: 0 6px 16px rgba(124, 58, 237, .45);
+    }
+    .aside-card code { overflow-wrap: anywhere; }
+    .aside-card .divider { border-top: 1px solid var(--hairline); margin: var(--sp-6) 0; }
+    .aside-card p:has(> .status) { display: flex; align-items: center; gap: 10px; }
+    code {
+      font: 12px/1.7 Consolas, "Cascadia Mono", monospace; padding: 2px 7px;
+      background: rgba(139, 92, 246, .18); color: #d3c2ff; border-radius: 6px;
+      border: 1px solid rgba(167, 139, 250, .22);
+    }
+    details { border-top: 1px solid var(--hairline); padding-top: var(--sp-4); margin: 0 0 var(--sp-6); }
+    summary { cursor: pointer; font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--violet-lite); font-weight: 600; }
+    summary:hover { color: #d8ccff; }
+    details[open] summary { margin-bottom: var(--sp-4); }
+
+    .status {
+      display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px; border-radius: 99px;
+      font-size: var(--fs-xs); font-weight: 600; line-height: 1.6; letter-spacing: 0; white-space: nowrap;
+      background: rgba(255, 255, 255, .06); color: var(--text-dim); border: 1px solid var(--hairline);
+    }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+    .status.ok, .status.ready { color: var(--green-lite); background: rgba(16, 185, 129, .16); border-color: rgba(16, 185, 129, .42); }
+    .status.warning, .status.needs_setup { color: var(--yellow-lite); background: rgba(251, 191, 36, .16); border-color: rgba(251, 191, 36, .42); }
+    .status.fail, .status.failed { color: var(--orange-lite); background: rgba(249, 115, 22, .17); border-color: rgba(249, 115, 22, .45); }
+    .status.info { color: #c9b6ff; background: rgba(139, 92, 246, .2); border-color: rgba(139, 92, 246, .48); }
+
+    .check { padding: var(--sp-5) 0; border-bottom: 1px solid rgba(167, 139, 250, .12); }
+    .check:last-child { border: 0; padding-bottom: 0; }
+    .check-title { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 6px; align-items: center; }
+    .check-title strong { font-size: var(--fs-md); font-weight: 600; line-height: var(--lh-snug); color: var(--text-strong); }
+    .check p { font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--text-dim); margin: 6px 0; }
+    .check p.next-action {
+      color: #f8bd8b; padding: var(--sp-3) var(--sp-4); margin-top: 10px; font-size: var(--fs-sm); line-height: var(--lh-base);
+      background: linear-gradient(90deg, rgba(249, 115, 22, .18), rgba(249, 115, 22, .03));
+      border-left: 2px solid var(--orange); border-radius: 0 11px 11px 0;
+    }
+    .check details { margin: 12px 0 0; padding: 0; border: 0; }
+    pre {
+      overflow-wrap: anywhere; white-space: pre-wrap; font: 12px/1.8 Consolas, "Cascadia Mono", monospace;
+      background: rgba(6, 2, 18, .78); border: 1px solid var(--hairline); border-radius: 13px;
+      padding: 16px; color: #a9c9e4;
+    }
+
+    .empty { text-align: center; padding: var(--sp-9) var(--sp-5); color: var(--text-dim); }
+    .empty .icon-box { margin: 0 auto 16px; width: 56px; height: 56px; }
+    .empty .icon-box svg { width: 24px; height: 24px; }
+    .empty strong { display: block; color: var(--text-strong); margin-bottom: 6px; font-weight: 600; font-size: var(--fs-md); line-height: var(--lh-snug); }
+    .empty p { font-size: var(--fs-sm); line-height: var(--lh-base); margin: 0; color: var(--text-faint); }
+
+    .summary-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); line-height: var(--lh-base); margin-top: var(--sp-6); color: var(--text-dim); }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 14px; }
+    .table-wrap:empty { display: none; }
+    .table-wrap table { margin-top: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); line-height: var(--lh-base); table-layout: fixed; font-variant-numeric: tabular-nums; }
+    caption {
+      caption-side: top; text-align: left; padding: 14px 16px; color: var(--text-strong);
+      font-weight: 600; font-size: var(--fs-sm); line-height: var(--lh-snug);
+      background: linear-gradient(90deg, rgba(139, 92, 246, .24), rgba(139, 92, 246, .02));
+      border-bottom: 1px solid var(--hairline);
+    }
+    th {
+      color: #9d8fc7; font-weight: 700; background: rgba(0, 0, 0, .16);
+      text-transform: uppercase; letter-spacing: .4px; font-size: var(--fs-2xs); line-height: 1.6;
+      padding: var(--sp-4) var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--hairline-2);
+    }
+    th, td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid rgba(167, 139, 250, .1); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover td:not(:last-child) { background: rgba(167, 139, 250, .07); }
+    td:first-child { color: #c9b6ff; font-weight: 600; }
+    td:last-child {
+      background: linear-gradient(90deg, rgba(16, 185, 129, .18), rgba(16, 185, 129, .03));
+      color: #86efc4; box-shadow: inset 2px 0 0 rgba(52, 211, 153, .6);
+    }
+
+    .preview-footer { margin-top: var(--sp-6); display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--sp-4); }
+    .preview-footer p { max-width: 380px; margin: 0; }
+
+    .banner {
+      border: 1px solid rgba(251, 191, 36, .26); border-left: 3px solid var(--yellow);
+      border-radius: 4px 13px 13px 4px; padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-7);
+      font-size: var(--fs-sm); line-height: var(--lh-base); color: #f3dcae;
+      background: linear-gradient(90deg, rgba(251, 191, 36, .16), rgba(251, 191, 36, .02));
+    }
+    .banner strong { color: var(--yellow-lite); }
+    .banner a { color: var(--yellow-lite); }
+
+    .signed-in { display: flex; align-items: center; gap: 13px; padding: 6px 0 14px; }
+    .signed-in .avatar {
+      background: rgba(16, 185, 129, .18); color: var(--green-lite); border-radius: 50%; padding: 10px;
+      display: grid; place-items: center; border: 1px solid rgba(16, 185, 129, .42);
+    }
+    .signed-in p { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--text-dim); }
+    .signed-in strong { color: var(--text-strong); font-weight: 600; }
+
+    footer {
+      margin-top: var(--sp-9); border-top: 1px solid var(--hairline); padding: var(--sp-6) 0;
+      display: flex; justify-content: space-between; font-size: var(--fs-2xs); line-height: 1.6; color: #7f71ab; letter-spacing: .3px;
+    }
+
+    /* per-section gradient icon badges */
+    #databasePanel .icon-box { background: linear-gradient(135deg, #ea580c, #fbbf24); box-shadow: 0 10px 24px rgba(234, 88, 12, .46), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    #diagnostics article.card .icon-box { background: linear-gradient(135deg, #0891b2, #22d3ee); box-shadow: 0 10px 24px rgba(8, 145, 178, .46), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    #metadata .stack > .card:first-child .icon-box { background: linear-gradient(135deg, #db2777, #f472b6); box-shadow: 0 10px 24px rgba(219, 39, 119, .46), inset 0 1px 0 rgba(255, 255, 255, .3); }
+    #previewPanel .icon-box { background: linear-gradient(135deg, #059669, #34d399); box-shadow: 0 10px 24px rgba(5, 150, 105, .46), inset 0 1px 0 rgba(255, 255, 255, .3); }
+
+    @media (min-width: 1450px) { main { padding-top: 54px; } }
+    @media (max-width: 1180px) { .layout { grid-template-columns: minmax(0, 1fr); } .aside-card { padding: 22px 24px; } main { max-width: 880px; } }
+    @media (max-width: 860px) {
+      .sidebar { width: 212px; padding: 26px 14px; }
+      .shell { margin-left: 212px; }
+      .topbar { padding: 0 var(--sp-6); }
+      main { padding: var(--sp-8) var(--sp-6) var(--sp-6); }
+      .step-strip { gap: var(--sp-4); }
+      .step-strip a { padding: var(--sp-4); font-size: var(--fs-sm); gap: 11px; }
+      .step-strip a:not(:last-child)::after { right: -12px; width: 12px; }
+    }
+    @media (max-width: 620px) {
+      .sidebar { position: static; width: auto; padding: 18px 20px 12px; border-right: 0; border-bottom: 1px solid var(--hairline); }
+      .brand strong { font-size: 20px; }
+      .brand small { font-size: 8px; }
+      .brand-mark { width: 37px; height: 37px; }
+      .nav-label, .sidebar-bottom, .nav-number { display: none; }
+      nav { display: flex; margin-top: 20px; gap: 7px; }
+      nav a { flex: 1; justify-content: center; padding: 10px 6px; font-size: 11px; gap: 7px; }
+      nav a:hover { transform: none; }
+      nav svg { width: 16px; height: 16px; }
+      .shell { margin-left: 0; }
+      .topbar { height: 52px; padding: 0 20px; font-size: 10px; }
+      main { padding: 26px 18px 16px; }
+      h1 { letter-spacing: -.6px; }
+      .subtitle { font-size: 12.5px; }
+      .card-header { padding: var(--sp-5) var(--sp-5) var(--sp-4); }
+      .card-body { padding: var(--sp-5); }
+      .card-footer { padding: var(--sp-4) var(--sp-5); }
+      .row { grid-template-columns: 1fr; gap: 0; }
+      .host-row { grid-template-columns: minmax(0, 1fr) 90px; gap: 14px; }
+      .step-strip { grid-template-columns: 1fr; gap: 10px; }
+      .step-strip a { padding: var(--sp-4) var(--sp-5); font-size: var(--fs-sm); }
+      .step-strip a:not(:last-child)::after { display: none; }
+      .step-circle { width: 32px; height: 32px; }
+      .page-heading > .pill { display: none; }
+      footer { gap: 14px; flex-wrap: wrap; }
+      h2 { font-size: 16px; }
+      button, .button { min-height: 45px; }
+      .actions { width: 100%; }
+      .actions button { flex: 1 1 auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Z"/><path d="M12 5v15"/></symbol>
+  <symbol id="i-setup" viewBox="0 0 24 24"><path d="M4 7h7m4 0h5M4 17h3m4 0h9"/><circle cx="13" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8Z M14 3v5h5 M8 12h8 M8 16h5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 3 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 1)"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5 M4 12c0 4 16 4 16 0"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+</defs></svg>
+<a class="skip" href="#main">ข้ามไปเนื้อหา</a>
+<aside class="sidebar">
+  <a class="brand" href="#setup"><span class="brand-mark"><svg aria-hidden="true"><use href="#i-book"/></svg></span><span><strong>GrimmLink</strong><small>LIBRARY WORKSPACE</small></span></a>
+  <div class="nav-label">WORKSPACE</div>
+  <nav aria-label="เมนูหลัก">
+    <a href="#setup" data-page="setup" aria-current="page"><svg aria-hidden="true"><use href="#i-setup"/></svg>ตั้งค่า<span class="nav-number">01</span></a>
+    <a href="#diagnostics" data-page="diagnostics"><svg aria-hidden="true"><use href="#i-pulse"/></svg>ตรวจสอบระบบ<span class="nav-number">02</span></a>
+    <a href="#metadata" data-page="metadata"><svg aria-hidden="true"><use href="#i-file"/></svg>Metadata<span class="nav-number">03</span></a>
+  </nav>
+  <div class="sidebar-bottom"><div class="reader-note"><strong>One library. Every reader.</strong>สำหรับ KOReader และ Readest</div><div class="connection"><span class="dot" id="sessionDot"></span><div><span id="sessionLabel">ยังไม่ได้เข้าสู่ระบบ</span><small>GrimmLink Adapter · V2</small></div></div></div>
+</aside>
+<div class="shell">
+  <header class="topbar"><div class="breadcrumb">Workspace <span>/</span><span id="breadcrumb">ตั้งค่า</span></div><span class="pill" id="environment">LOCAL WORKSPACE</span></header>
+  <main id="main" tabindex="-1">
+    <div id="fileNotice" class="banner" hidden><strong>คุณกำลังดูไฟล์ตัวอย่าง UI</strong> — การเข้าสู่ระบบและตรวจสอบข้อมูลต้องเปิดจาก Adapter ที่กำลังทำงาน เช่น <a href="http://localhost:8085/api/grimmlink/v2/local/metadata">localhost:8085</a> หรือ IP ของเครื่องในวง LAN</div>
+    <section id="setup" class="page" aria-labelledby="setupTitle">
+      <div class="page-heading"><div><p class="eyebrow">LET’S GET CONNECTED</p><h1 id="setupTitle" tabindex="-1">พื้นที่อ่านที่เชื่อมถึงกัน</h1><p class="subtitle">ตั้งค่า GrimmLink ให้พร้อม แล้วจัดการข้อมูลหนังสือได้จากที่เดียว</p></div><span class="pill">ADAPTER V2</span></div>
+      <div class="step-strip" aria-label="ขั้นตอนเริ่มใช้งาน"><a href="#loginPanel"><span class="step-circle active">1</span>เชื่อมต่อบัญชี</a><a href="#databasePanel"><span class="step-circle">2</span>ตั้งค่า Sync ครั้งแรก</a><a href="#diagnostics"><span class="step-circle">3</span>ตรวจสอบความพร้อม</a></div>
+      <div class="layout"><div class="stack">
+        <article class="card" id="loginPanel"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-link"/></svg></span><div><h2>เชื่อมต่อ Grimmory</h2><p>ใช้บัญชีที่เข้าสู่เว็บไซต์ Grimmory เพื่อจัดการ Library และ Metadata</p></div></div>
+          <div class="card-body"><form id="loginForm"><div class="row"><div class="field"><label for="username">Grimmory username</label><input id="username" autocomplete="username" placeholder="ชื่อผู้ใช้ Grimmory" required></div><div class="field"><label for="password">Grimmory password</label><div class="password-field"><input id="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน Grimmory" required><button type="button" data-reveal="password" aria-label="แสดงรหัสผ่าน Grimmory" aria-pressed="false">แสดง</button></div></div></div><div class="actions"><button class="primary" id="login" type="submit">เชื่อมต่อบัญชี <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><span class="helper">Readest และ KOReader รับรหัส KOSync ในแอปอ่านโดยตรง</span></div></form>
+          <div id="connectedPanel" hidden><div class="signed-in"><span class="avatar"><svg aria-hidden="true"><use href="#i-check"/></svg></span><div><strong>มีเซสชันพร้อมใช้งาน</strong><p id="connectedName">ระบบจะตรวจสอบเซสชันเมื่อเรียกข้อมูล</p></div></div><button id="logout">ออกจากระบบ</button></div><p id="loginMessage" class="feedback" role="status"></p></div>
+        </article>
+        <article class="card" id="databasePanel"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-db"/></svg></span><div><h2>เตรียม Sync หนังสือครั้งแรก</h2><p>ให้ Adapter จับคู่ไฟล์กับหนังสือใน Grimmory ได้อัตโนมัติ</p></div></div>
+          <form id="dbForm"><div class="card-body"><div class="note"><strong>ตั้งค่าครั้งเดียว สำหรับหนังสือทุกเล่ม</strong>ใช้บัญชีฐานข้อมูลที่อ่านได้อย่างเดียว กรอกข้อมูลด้านล่างเพื่อสร้างค่าตั้งค่า แล้วนำไปใส่ในไฟล์ <code>.env</code> ของ Adapter</div>
+            <div class="row host-row"><div class="field"><label for="dbHost">Database host</label><input id="dbHost" placeholder="grimmory-db หรือ 192.168.1.20" required autocomplete="off" spellcheck="false"></div><div class="field"><label for="dbPort">Port</label><input id="dbPort" type="number" value="3306" min="1" max="65535" required></div></div>
+            <div class="row"><div class="field"><label for="dbName">Database name</label><input id="dbName" value="grimmory" required spellcheck="false"></div><div class="field"><label for="dbUser">Read-only username</label><input id="dbUser" placeholder="เช่น grimmlink_reader" required autocomplete="off" spellcheck="false"></div></div>
+            <div class="field"><label for="dbPassword">Database password</label><div class="password-field"><input id="dbPassword" type="password" autocomplete="new-password" placeholder="รหัสผ่านของบัญชีฐานข้อมูล" required><button type="button" data-reveal="dbPassword" aria-label="แสดงรหัสผ่านฐานข้อมูล" aria-pressed="false">แสดง</button></div></div>
+            <details><summary>การตั้งค่าขั้นสูงและสิทธิ์ฐานข้อมูล</summary><label for="dbSslCa">TLS CA file path <span class="muted">(ไม่จำเป็น)</span></label><input id="dbSslCa" placeholder="/certs/grimmory-db-ca.pem" spellcheck="false"><p class="helper" style="margin-top:10px">ใช้ path ภายใน Adapter/container บัญชีต้องมีสิทธิ์ SELECT บน <code>book</code>, <code>book_file</code>, <code>library</code> และ <code>library_path</code> หากใช้ Docker ให้ระบุชื่อ service ฐานข้อมูลใน network เดียวกัน</p></details>
+            <div class="actions"><button class="primary" id="copyDbConfig" type="submit"><svg aria-hidden="true"><use href="#i-copy"/></svg>คัดลอกค่าตั้งค่า .env</button><span class="helper">ยังไม่มีการเปลี่ยนค่าบนเซิร์ฟเวอร์</span></div><p id="copyDbMessage" class="feedback" role="status"></p>
+          </div><div class="card-footer">ข้อมูลในฟอร์มนี้อยู่ในเบราว์เซอร์เท่านั้น · ค่าที่คัดลอกมีรหัสผ่าน เก็บไฟล์ .env เป็นส่วนตัว</div></form>
+        </article>
+      </div><aside class="aside-card"><p class="eyebrow">A LITTLE GUIDANCE</p><h3>เริ่มใช้งานได้ใน 3 ขั้นตอน</h3><ol><li>เชื่อมต่อด้วยบัญชีที่ใช้เข้าสู่เว็บไซต์ Grimmory</li><li>คัดลอกค่าฐานข้อมูลไปใส่ .env แล้ว restart Adapter</li><li>เปิด “ตรวจสอบระบบ” เพื่อดูว่าพร้อม Sync หรือยัง</li></ol><div class="divider"></div><h3>บัญชีแต่ละส่วน</h3><p><strong>Grimmory</strong> ใช้จัดการ Library และ Metadata ในหน้านี้</p><p><strong>KOSync</strong> ใส่ใน Readest หรือ KOReader เพื่อ Sync ตำแหน่งอ่าน</p><p><strong>Database</strong> ใช้ค้นหาหนังสือจากไฟล์</p><div class="divider"></div><p style="margin:0">ใช้ในวง LAN ได้ผ่าน IP ของเครื่อง หรือ <code>Grimmlink.local:8085</code> เมื่อเปิด mDNS และเครือข่ายรองรับ</p></aside></div>
+    </section>
+    <section id="diagnostics" class="page" aria-labelledby="diagnosticsTitle" hidden>
+      <p class="eyebrow">KEEP THINGS RUNNING</p><h1 id="diagnosticsTitle" tabindex="-1">ตรวจสอบความพร้อมของระบบ</h1><p class="subtitle">ดูว่าอะไรพร้อมใช้งาน อะไรต้องแก้ และดาวน์โหลดรายงานเพื่อช่วยหาสาเหตุ</p>
+      <div class="layout"><article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-pulse"/></svg></span><div><h2>System health</h2><p>ตรวจสอบแบบอ่านอย่างเดียว ไม่เปลี่ยนข้อมูลหนังสือ</p></div></div><div class="card-body"><div class="actions"><button class="primary" id="runDiagnostics">เริ่มตรวจสอบระบบ</button><button id="downloadDiagnostics" disabled>ดาวน์โหลดรายงาน</button></div><p id="diagnosticAuthHint" class="helper" style="margin-top:12px">กรุณา <a href="#loginPanel">เชื่อมต่อบัญชี</a> ก่อนตรวจสอบ</p><div id="diagnosticSummary" class="summary-bar" role="status"></div><div id="diagnosticChecks"><div class="empty"><span class="icon-box"><svg aria-hidden="true"><use href="#i-pulse"/></svg></span><strong>ยังไม่มีผลการตรวจสอบ</strong><p>เริ่มตรวจเพื่อดูสถานะ API, ฐานข้อมูล, โฟลเดอร์ และ mDNS</p></div></div></div></article>
+      <aside class="aside-card"><p class="eyebrow">UNDERSTAND YOUR STATUS</p><h3>อ่านผลได้ง่าย ๆ</h3><p><span class="status ok">พร้อมใช้งาน</span> การตรวจสอบผ่าน</p><p><span class="status warning">ควรตรวจสอบ</span> มีค่าที่อาจต้องตั้งเพิ่ม</p><p><span class="status fail">พบปัญหา</span> ดูวิธีแก้ใต้รายการนั้น</p><div class="divider"></div><h3>ก่อนแชร์รายงาน</h3><p>รายงานไม่รวมรหัสผ่านหรือ token แต่อาจมี IP และ path ในเครื่อง ควรอ่านก่อนส่งให้ผู้อื่น</p><p class="helper">mDNS ที่ประกาศได้ ยังไม่ยืนยันว่าอุปกรณ์อื่นใน LAN เข้าถึงได้</p></aside></div>
+    </section>
+    <section id="metadata" class="page" aria-labelledby="metadataTitle" hidden>
+      <p class="eyebrow">MAKE YOUR LIBRARY FEEL RIGHT</p><h1 id="metadataTitle" tabindex="-1">อัปเดตข้อมูลหนังสือ</h1><p class="subtitle">นำข้อมูลจาก OPF หรือ sidecar เข้า Grimmory โดยตรวจดูการเปลี่ยนแปลงก่อนบันทึก</p>
+      <div class="stack">
+      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-setup"/></svg></span><div><h2>จัดการ Metadata ตาม Library</h2><p>เปิด Auto และกดตรวจตอนนี้ได้ตลอด งานทำต่อแม้ปิดหน้าเว็บ</p></div></div><div class="card-body">
+        <div class="actions"><button id="loadAutomation">โหลด Library</button><button id="bindAutomation">เชื่อมบัญชีงานเบื้องหลัง</button><span class="helper" id="automationAccount">เข้าสู่ระบบก่อนตั้งค่า</span></div>
+        <p id="automationMessage" class="feedback" role="status"></p>
+        <div id="automationLibraries" style="margin-top:18px"></div>
+        <div id="automationTools" hidden>
+          <div class="row" style="margin-top:20px"><div class="field"><label for="automationMode">คำสั่งสำหรับ Library ที่เลือก</label><select id="automationMode"><option value="check">ตรวจและอัปเดตตอนนี้ ตามกติกาที่ตั้งไว้</option><option value="preview">ดูตัวอย่างอย่างเดียว ไม่อัปเดต</option><option value="backfill_missing">นำเข้าเล่มที่มีอยู่ — เติมช่องว่าง</option><option value="backfill_source">นำเข้าเล่มที่มีอยู่ — ใช้ source ในฟิลด์ที่เลือก</option><option value="retry">ตรวจและลองงานที่ค้างใหม่</option></select></div><div class="field"><label for="automationLibrary">ตั้งค่า / ดูงานของ Library</label><select id="automationLibrary"></select></div></div>
+          <div class="actions"><button class="primary" id="runAutomation">ตรวจและอัปเดตตอนนี้</button><button id="refreshActivity">ดูผลล่าสุด</button></div>
+          <p class="helper" style="margin-top:10px">หากเพิ่งคัดลอกหนังสือ ให้ Grimmory สแกนเข้า Library ก่อน ระบบจะรอเมื่อยังไม่พบรายการ</p>
+          <details style="margin-top:20px"><summary>ตั้งค่า Auto และโฟลเดอร์ NAS ของ Library นี้</summary><form id="automationPolicyForm">
+            <label style="display:flex;align-items:center;gap:10px"><input id="automationAuto" type="checkbox" style="width:18px;min-height:18px">เปิด Auto ตามเวลา · ยังสั่ง Manual ได้เสมอ</label>
+            <div class="row"><div class="field"><label for="automationInterval">รอบตรวจ (วินาที)</label><input id="automationInterval" type="number" min="60" max="86400" value="300" required></div><div class="field"><label for="automationPreference">เมื่อมีหลาย source</label><select id="automationPreference"><option value="review">รอตรวจหากข้อมูลต่างกัน</option><option value="opf">ใช้ OPF ก่อน</option><option value="json">ใช้ JSON sidecar ก่อน</option></select></div></div>
+            <p class="helper">เลือก root ที่ Adapter/container มองเห็นให้ตรงกับแต่ละ path ของ Grimmory และระบุไฟล์ marker ที่มีอยู่บน NAS เช่น .grimmlink-storage เพื่อหยุดงานเมื่อ mount หลุด</p>
+            <div id="automationMappings"></div>
+            <fieldset style="margin:16px 0;border:1px solid var(--hairline,#dce3da);border-radius:8px"><legend>ฟิลด์ที่อนุญาตให้อัปเดต</legend><div id="automationFields" style="display:flex;gap:12px;flex-wrap:wrap"></div></fieldset>
+            <button class="primary" id="saveAutomation" type="submit">บันทึกการตั้งค่า Library</button>
+          </form></details>
+          <div id="automationActivity" style="margin-top:20px" aria-live="polite">
+            <div id="automationRuns"></div>
+            <div id="automationResults"></div>
+          </div>
+        </div>
+      </div><div class="card-footer">Auto อัปเดตหนังสือใหม่ · เล่มเดิมก่อนเริ่มใช้งานให้นำเข้าย้อนหลัง · ปกแสดงสถานะแยกจาก Metadata</div></article>
+      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-file"/></svg></span><div><h2>เลือกไฟล์และหนังสือด้วยตนเอง</h2><p>ค้นหาไฟล์จากโฟลเดอร์ที่ตั้งไว้ใน Adapter</p></div></div><div class="card-body"><div class="actions" style="margin-bottom:20px"><button id="scan">สแกนหาไฟล์ Metadata</button><span id="sourceCount" class="helper">ยังไม่ได้สแกน</span></div><p id="metadataAuthHint" class="helper">กรุณา <a href="#loginPanel">เชื่อมต่อบัญชี</a> ก่อนสแกนไฟล์</p><div class="row"><div class="field"><label for="source">ไฟล์ต้นทาง · OPF / sidecar</label><select id="source"><option value="">สแกนเพื่อเลือกไฟล์</option></select></div><div class="field"><label for="book">ไฟล์หนังสือที่ต้องการอัปเดต</label><select id="book"><option value="">เลือกไฟล์ต้นทางก่อน</option></select></div></div><button class="primary" id="preview">ดูตัวอย่างการเปลี่ยนแปลง <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><p id="scanMessage" class="feedback" role="status"></p></div></article>
+      <article class="card" id="previewPanel"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-check"/></svg></span><div><h2>2. ตรวจสอบแล้วบันทึก</h2><p>เปรียบเทียบข้อมูลปัจจุบันกับข้อมูลใหม่จากไฟล์</p></div></div><div class="card-body"><div id="message" class="feedback" role="status"></div><div id="previewEmpty" class="empty"><span class="icon-box"><svg aria-hidden="true"><use href="#i-book"/></svg></span><strong>ข้อมูลที่ดี เริ่มจากการตรวจดูก่อน</strong><p>เลือกไฟล์แล้วกดดูตัวอย่าง การเปลี่ยนแปลงจะแสดงที่นี่</p></div><div id="diff" class="table-wrap"></div><div class="preview-footer"><p class="helper">เมื่อเปลี่ยนไฟล์ที่เลือก ต้องดูตัวอย่างใหม่ก่อนบันทึก</p><button class="primary" id="apply" disabled>บันทึกการเปลี่ยนแปลง</button></div></div></article></div>
+    </section>
+    <footer><span>GrimmLink · A quieter home for your library.</span><span>KOReader + Readest</span></footer>
+  </main>
+</div>
+<script>
+(() => {
+  const base = "/api/grimmlink/v2";
+  const tokenKey = "grimmlink.metadata.session";
+  const $ = id => document.getElementById(id);
+  const isPreviewMode = location.protocol === "file:" || new URLSearchParams(location.search).get("preview") === "1";
+  let sessionToken = null;
+  try { sessionToken = sessionStorage.getItem(tokenKey); } catch (_) {}
+  let sources = [], currentPreview = null, reviewedPayload = null, diagnosticReport = null;
+  let selectionVersion = 0;
+  const busy = new Set();
+  const names = { setup: "ตั้งค่า", diagnostics: "ตรวจสอบระบบ", metadata: "Metadata" };
+  const statusNames = { ok: "พร้อมใช้งาน", ready: "ตรวจสอบผ่าน", warning: "ควรตรวจสอบ", needs_setup: "มีค่าที่ต้องตรวจสอบ", fail: "พบปัญหา", failed: "พบปัญหา", info: "ข้อมูลเพิ่มเติม" };
+  const checkNames = { adapter: "GrimmLink Adapter", adapterDatabase: "ฐานข้อมูล Adapter", grimmoryApi: "Grimmory API", grimmoryIdentityDatabase: "ฐานข้อมูลจับคู่หนังสือ", metadataRoots: "โฟลเดอร์ Metadata", sessionRuntime: "เซสชันและการทำงาน", mdns: "การค้นหาใน LAN · mDNS" };
+  const say = (id, text, tone = "") => { $(id).textContent = text; $(id).dataset.tone = tone; };
+  const headers = () => ({ Authorization: `Bearer ${sessionToken}`, "Content-Type": "application/json" });
+  const selected = () => $("source").value === "" ? null : sources[Number($("source").value)];
+  const hasSelection = () => Boolean(selected() && $("book").value);
+  const syncControls = () => {
+    const online = Boolean(sessionToken) && !isPreviewMode;
+    const metadataBusy = ["scan", "preview", "apply"].some(key => busy.has(key));
+    $("loginForm").hidden = Boolean(sessionToken); $("connectedPanel").hidden = !sessionToken;
+    $("sessionLabel").textContent = sessionToken ? "มีเซสชันพร้อมใช้งาน" : "ยังไม่ได้เข้าสู่ระบบ";
+    $("sessionDot").classList.toggle("connected", Boolean(sessionToken));
+    $("login").disabled = isPreviewMode || busy.has("login");
+    $("logout").disabled = busy.has("logout") || metadataBusy || busy.has("runDiagnostics");
+    $("runDiagnostics").disabled = !online || busy.has("runDiagnostics") || busy.has("logout");
+    $("downloadDiagnostics").disabled = !diagnosticReport || busy.has("runDiagnostics");
+    $("scan").disabled = !online || metadataBusy || busy.has("logout");
+    $("source").disabled = !online || !sources.length || metadataBusy;
+    $("book").disabled = !online || !selected()?.bookCandidates?.length || metadataBusy;
+    $("preview").disabled = !online || !hasSelection() || metadataBusy || busy.has("logout");
+    $("apply").disabled = !online || !reviewedPayload || currentPreview?.status !== "dry_run" || metadataBusy || busy.has("logout");
+    $("diagnosticAuthHint").hidden = online; $("metadataAuthHint").hidden = online;
+    for (const id of ["loadAutomation", "bindAutomation", "runAutomation", "refreshActivity", "saveAutomation"]) $(id).disabled = !online || busy.has(id);
+    $("automationPolicyForm").inert = !online;
+  };
+  const work = async (id, label, fn) => {
+    if (busy.has(id)) return;
+    const button = $(id), previous = button.innerHTML;
+    busy.add(id); button.textContent = label; button.setAttribute("aria-busy", "true"); syncControls();
+    try { await fn(); } finally { busy.delete(id); button.innerHTML = previous; button.removeAttribute("aria-busy"); syncControls(); }
+  };
+  const invalidatePreview = () => {
+    selectionVersion++; currentPreview = null; reviewedPayload = null;
+    $("diff").replaceChildren(); $("previewEmpty").hidden = false; say("message", ""); syncControls();
+  };
+  const clearSession = () => {
+    sessionToken = null; try { sessionStorage.removeItem(tokenKey); } catch (_) {}
+    sources = []; diagnosticReport = null; invalidatePreview();
+    $("source").replaceChildren(new Option("สแกนเพื่อเลือกไฟล์", ""));
+    $("book").replaceChildren(new Option("เลือกไฟล์ต้นทางก่อน", ""));
+    $("diagnosticChecks").replaceChildren(); $("diagnosticSummary").textContent = "เข้าสู่ระบบเพื่อเริ่มตรวจสอบ";
+    $("sourceCount").textContent = "ยังไม่ได้สแกน"; say("scanMessage", ""); syncControls();
+    $("automationLibraries").replaceChildren(); clearActivity(); $("automationTools").hidden = true; autoData = null;
+  };
+  const request = async (path, options = {}) => {
+    if (isPreviewMode) throw new Error("เปิดหน้านี้จาก URL ของ Adapter ก่อนใช้งาน");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
+    try {
+      const response = await fetch(base + path, { ...options, signal: controller.signal });
+      const data = response.status === 204 ? null : await response.json().catch(() => null);
+      if (response.status === 401 && path !== "/local/auth/session") { clearSession(); say("loginMessage", "เซสชันหมดอายุ กรุณาเชื่อมต่อบัญชีอีกครั้ง", "error"); throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งที่หน้าตั้งค่า"); }
+      if (!response.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `คำขอไม่สำเร็จ (HTTP ${response.status})`);
+      if (response.status !== 204 && data === null) throw new Error("เซิร์ฟเวอร์ตอบกลับในรูปแบบที่ไม่ถูกต้อง");
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("รอนานเกินไป ตรวจสอบการเชื่อมต่อแล้วลองใหม่ หากกำลังบันทึก ให้ดูตัวอย่างอีกครั้งเพื่อเช็คข้อมูลล่าสุดก่อนทำซ้ำ");
+      if (error instanceof TypeError) throw new Error("เชื่อมต่อ Adapter ไม่ได้ ตรวจสอบว่าเซิร์ฟเวอร์ทำงานและเครือข่ายพร้อมใช้งาน");
+      throw error;
+    } finally { clearTimeout(timeout); }
+  };
+  const showPage = (focus = false) => {
+    const hash = location.hash.slice(1);
+    if (hash === "main") { $("main").focus(); return; }
+    const page = Object.hasOwn(names, hash) ? hash : "setup";
+    document.querySelectorAll(".page").forEach(element => { element.hidden = element.id !== page; });
+    document.querySelectorAll("nav [data-page]").forEach(link => { if (link.dataset.page === page) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current"); });
+    $("breadcrumb").textContent = names[page]; document.title = `${names[page]} · GrimmLink`;
+    if (focus) {
+      if (["loginPanel", "databasePanel"].includes(hash)) { $(hash).scrollIntoView({ block: "start" }); $(hash === "loginPanel" ? "username" : "dbHost").focus({ preventScroll: true }); }
+      else { $(page + "Title").focus({ preventScroll: true }); window.scrollTo({ top: 0 }); }
+    }
+  };
+  window.addEventListener("hashchange", () => showPage(true));
+  document.querySelectorAll("[data-reveal]").forEach(button => button.addEventListener("click", () => {
+    const input = $(button.dataset.reveal), show = input.type === "password";
+    input.type = show ? "text" : "password"; button.textContent = show ? "ซ่อน" : "แสดง"; button.setAttribute("aria-pressed", String(show));
+  }));
+  const refreshBooks = () => {
+    invalidatePreview(); $("book").replaceChildren();
+    for (const path of selected()?.bookCandidates || []) $("book").append(new Option(path, path));
+    if (!$("book").options.length) $("book").append(new Option("ไม่พบหนังสือในโฟลเดอร์เดียวกับไฟล์นี้", ""));
+    syncControls();
+  };
+  const scan = async () => {
+    invalidatePreview(); say("scanMessage", "กำลังค้นหาไฟล์ในโฟลเดอร์ที่ตั้งไว้…");
+    try {
+      const result = await request("/local/metadata/sources", { headers: headers() });
+      sources = result; $("source").replaceChildren();
+      sources.forEach((item, index) => $("source").append(new Option(`${item.rootName} · ${item.sourcePath} (${item.sourceType})`, String(index))));
+      if (!sources.length) $("source").append(new Option("ไม่พบไฟล์ Metadata", ""));
+      refreshBooks(); $("sourceCount").textContent = `พบ ${sources.length} ไฟล์`;
+      say("scanMessage", sources.length ? "เลือกไฟล์แล้วดูตัวอย่างได้เลย" : "ไม่พบ OPF หรือ sidecar ตรวจสอบ METADATA_IMPORT_ROOTS และการแชร์โฟลเดอร์ในหน้าตรวจสอบระบบ", sources.length ? "success" : "");
+    } catch (error) { say("scanMessage", error.message, "error"); }
+  };
+  $("loginForm").onsubmit = event => {
+    event.preventDefault(); work("login", "กำลังเชื่อมต่อ…", async () => {
+      say("loginMessage", "");
+      try {
+        const result = await request("/local/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: $("username").value.trim(), password: $("password").value }) });
+        sessionToken = result.accessToken; try { sessionStorage.setItem(tokenKey, sessionToken); } catch (_) {}
+        $("password").value = ""; $("connectedName").textContent = result.username;
+        say("loginMessage", "เชื่อมต่อสำเร็จ พร้อมตรวจสอบระบบและจัดการ Metadata", "success");
+      } catch (error) { say("loginMessage", error.message, "error"); }
+    });
+  };
+  $("logout").onclick = () => work("logout", "กำลังออกจากระบบ…", async () => {
+    let revoked = true;
+    try { await request("/auth/session", { method: "DELETE", headers: headers() }); } catch (_) { revoked = false; }
+    clearSession(); say("loginMessage", revoked ? "ออกจากระบบแล้ว" : "ล้างเซสชันในเบราว์เซอร์แล้ว แต่ติดต่อเซิร์ฟเวอร์เพื่อยกเลิกเซสชันไม่สำเร็จ");
+  });
+  $("dbForm").onsubmit = async event => {
+    event.preventDefault();
+    const host = $("dbHost").value.trim(), user = $("dbUser").value.trim(), password = $("dbPassword").value;
+    const database = $("dbName").value.trim(), port = Number($("dbPort").value), ca = $("dbSslCa").value.trim();
+    if (!host || !user || !password || !database || !Number.isInteger(port) || port < 1 || port > 65535 || [host, user, password, database, ca].some(value => /[\r\n]/.test(value))) { say("copyDbMessage", "กรอกข้อมูลให้ครบ และไม่ใส่การขึ้นบรรทัดใหม่ในค่า", "error"); return; }
+    const quote = value => `'${value.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`;
+    const snippet = ["GRIMMORY_DB_ENABLED=true", `GRIMMORY_DB_HOST=${quote(host)}`, `GRIMMORY_DB_PORT=${port}`, `GRIMMORY_DB_NAME=${quote(database)}`, `GRIMMORY_DB_USER=${quote(user)}`, `GRIMMORY_DB_PASSWORD=${quote(password)}`, ...(ca ? [`GRIMMORY_DB_SSL_CA=${quote(ca)}`] : [])].join("\n");
+    try {
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(snippet);
+      else { const helper = document.createElement("textarea"); helper.value = snippet; helper.style.cssText = "position:fixed;left:-10000px"; document.body.append(helper); helper.select(); try { if (!document.execCommand("copy")) throw new Error("เบราว์เซอร์ไม่อนุญาตให้คัดลอก กรุณาลองเปิดผ่าน localhost หรือ HTTPS"); } finally { helper.remove(); } }
+      $("dbPassword").value = ""; say("copyDbMessage", "คัดลอกแล้ว → วางใน .env ของ Adapter → บันทึกและ restart → เปิดหน้าตรวจสอบระบบ", "success");
+    } catch (error) { say("copyDbMessage", error.message, "error"); }
+  };
+  const renderDiagnostics = report => {
+    diagnosticReport = report;
+    const summary = $("diagnosticSummary"); summary.replaceChildren();
+    const state = document.createElement("span"); state.className = `status ${report.overall}`; state.textContent = statusNames[report.overall] || report.overall;
+    summary.append(state, document.createTextNode(`${report.checks.length} รายการ · ${new Date(report.generatedAt).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`));
+    const list = $("diagnosticChecks"); list.replaceChildren();
+    for (const item of report.checks) {
+      const row = document.createElement("div"); row.className = "check";
+      const title = document.createElement("div"); title.className = "check-title";
+      const name = document.createElement("strong"); name.textContent = checkNames[item.name] || item.name;
+      const badge = document.createElement("span"); badge.className = `status ${item.status}`; badge.textContent = statusNames[item.status] || item.status;
+      title.append(name, badge); row.append(title);
+      const description = document.createElement("p"); description.textContent = item.summary; row.append(description);
+      if (item.action) { const action = document.createElement("p"); action.className = "next-action"; action.textContent = `ขั้นตอนถัดไป: ${item.action}`; row.append(action); }
+      if (item.details) { const details = document.createElement("details"), label = document.createElement("summary"), data = document.createElement("pre"); label.textContent = "รายละเอียดทางเทคนิค"; data.textContent = JSON.stringify(item.details, null, 2); details.append(label, data); row.append(details); }
+      list.append(row);
+    }
+  };
+  $("runDiagnostics").onclick = () => work("runDiagnostics", "กำลังตรวจสอบ…", async () => {
+    diagnosticReport = null; $("diagnosticChecks").replaceChildren(); $("diagnosticSummary").textContent = "กำลังตรวจสอบการเชื่อมต่อและการตั้งค่า…";
+    try { renderDiagnostics(await request("/local/diagnostics", { headers: headers() })); }
+    catch (error) { $("diagnosticSummary").textContent = error.message; }
+  });
+  $("downloadDiagnostics").onclick = () => {
+    if (!diagnosticReport) return;
+    const blob = new Blob([JSON.stringify(diagnosticReport, null, 2)], { type: "application/json" });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "grimmlink-diagnostics.json";
+    document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  };
+  $("scan").onclick = () => work("scan", "กำลังสแกน…", scan);
+  $("source").onchange = refreshBooks; $("book").onchange = invalidatePreview;
+  const operationId = () => {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    const bytes = crypto.getRandomValues(new Uint8Array(16)); bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  const renderDiff = data => {
+    $("diff").replaceChildren(); $("previewEmpty").hidden = true;
+    if (!data?.fields_to_update?.length) return;
+    const table = document.createElement("table"), head = document.createElement("thead"), titles = document.createElement("tr"), body = document.createElement("tbody");
+    for (const label of ["ข้อมูล", "ใน Grimmory", "ใหม่จากไฟล์"]) { const th = document.createElement("th"); th.scope = "col"; th.textContent = label; titles.append(th); }
+    head.append(titles); table.append(head, body);
+    const caption = document.createElement("caption"); caption.textContent = "รายการข้อมูลที่จะเปลี่ยนแปลง"; caption.style.textAlign = "left"; table.prepend(caption);
+    for (const field of data.fields_to_update) { const row = document.createElement("tr"); for (const value of [field, data.metadata_before?.[field] ?? "—", data.metadata_after?.[field] ?? "—"]) { const cell = document.createElement("td"); cell.textContent = typeof value === "string" ? value : JSON.stringify(value); row.append(cell); } body.append(row); }
+    $("diff").append(table);
+  };
+  $("preview").onclick = () => work("preview", "กำลังเปรียบเทียบ…", async () => {
+    invalidatePreview(); const version = selectionVersion;
+    try {
+      const item = selected(); if (!hasSelection()) throw new Error("เลือกไฟล์ต้นทางและหนังสือก่อนดูตัวอย่าง");
+      const payload = { operationId: operationId(), rootIndex: item.rootIndex, sourcePath: item.sourcePath, bookPath: $("book").value };
+      const result = await request("/local/metadata/preview", { method: "POST", headers: headers(), body: JSON.stringify(payload) });
+      if (version !== selectionVersion) return;
+      currentPreview = result; reviewedPayload = result.status === "dry_run" ? payload : null; renderDiff(result.preview);
+      const count = result.preview?.fields_to_update?.length || 0;
+      say("message", `หนังสือ #${result.book_id} · ${count ? `เปลี่ยนแปลง ${count} รายการ` : "ไม่มีการเปลี่ยนแปลงฟิลด์ Metadata"} · สถานะ: ${result.status}${result.cover_status ? ` · ปก: ${result.cover_status}` : ""}`);
+      $("previewPanel").scrollIntoView({ block: "nearest" });
+    } catch (error) { invalidatePreview(); say("message", error.message, "error"); }
+  });
+  $("apply").onclick = () => work("apply", "กำลังบันทึก…", async () => {
+    if (!reviewedPayload || !currentPreview) return;
+    const payload = { ...reviewedPayload, operationId: operationId() }; reviewedPayload = null;
+    try {
+      const result = await request("/local/metadata/apply", { method: "POST", headers: headers(), body: JSON.stringify(payload) });
+      currentPreview = null;
+      say("message", `ผลการบันทึก: ${result.status}${result.cover_status ? ` · ปก: ${result.cover_status}` : ""} · กดดูตัวอย่างอีกครั้งเพื่อตรวจข้อมูลล่าสุด`, ["failed", "error"].includes(result.status) ? "error" : "");
+    } catch (error) { currentPreview = null; say("message", error.message + " กรุณาดูตัวอย่างใหม่ก่อนบันทึกอีกครั้ง", "error"); }
+  });
+  let autoData = null, activityLoading = false, activityHasWork = false;
+  let lastActivityPoll = 0, lastFullActivity = "";
+  const clearActivity = () => {
+    $("automationRuns").replaceChildren();
+    $("automationResults").replaceChildren();
+    activityHasWork = false;
+    lastActivityPoll = 0;
+    lastFullActivity = "";
+  };
+  const metadataFields = ["title", "subtitle", "authors", "publisher", "publishedDate", "description", "language", "categories", "isbn10", "isbn13", "seriesName", "seriesNumber", "seriesTotal"];
+  const stateLabels = { queued: "เข้าคิว / รอลองใหม่", running: "กำลังทำงาน", completed: "จบรอบตรวจ", cancelled: "หยุดแล้ว", blocked: "ต้องแก้การตั้งค่า", failed: "พบข้อผิดพลาด", no_source: "ไม่มี OPF/sidecar", waiting_stable: "รอไฟล์นิ่ง", needs_review: "รอตรวจข้อขัดแย้ง", backfill_required: "รอนำเข้าย้อนหลัง", updated: "อัปเดตแล้ว", partial: "อัปเดตบางส่วน", in_sync: "ข้อมูลตรงกัน", preview: "ตัวอย่าง", skipped: "ข้ามตามกติกา", retry_wait: "รอตรวจใหม่" };
+  const node = (tag, text = "", className = "") => { const element = document.createElement(tag); element.textContent = text; element.className = className; return element; };
+  const apiAutomation = (path, options = {}) => request("/local/automation" + path, { headers: headers(), ...options });
+  const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วระบบจะลองใหม่", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบหลาย source ที่ให้ข้อมูลต่างกัน เลือกชนิด source ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
+  const currentLibrary = () => autoData?.libraries.find(library => String(library.id) === $("automationLibrary").value);
+  $("automationMode").onchange = () => { $("runAutomation").textContent = { check: "ตรวจและอัปเดตตอนนี้", preview: "สร้างตัวอย่าง", backfill_missing: "นำเข้าย้อนหลัง · เติมช่องว่าง", backfill_source: "นำเข้าย้อนหลัง · ใช้ค่าจาก source", retry: "ลองงานที่ค้างใหม่" }[$("automationMode").value]; };
+  const renderPolicy = () => {
+    const library = currentLibrary(); if (!library) return;
+    const policy = library.policy;
+    $("automationAuto").checked = policy?.autoEnabled || false;
+    $("automationInterval").value = policy?.intervalSeconds || 300;
+    $("automationPreference").value = policy?.sourcePreference || "review";
+    $("automationMappings").replaceChildren();
+    for (const path of library.paths || []) {
+      const row = node("div", "", "row"), rootField = node("div", "", "field"), markerField = node("div", "", "field");
+      const root = node("select"); root.dataset.pathId = String(path.id); root.id = `map-root-${path.id}`;
+      root.append(new Option("ยังไม่ผูกโฟลเดอร์", ""));
+      for (const item of autoData.roots) root.append(new Option(item.path, String(item.index)));
+      const mapping = policy?.mappings.find(item => item.libraryPathId === path.id);
+      root.value = mapping ? String(mapping.rootIndex) : "";
+      const marker = node("input"); marker.id = `map-marker-${path.id}`; marker.value = mapping?.marker || ".grimmlink-storage"; marker.maxLength = 512;
+      const rootLabel = node("label", `Grimmory: ${path.path}`); rootLabel.htmlFor = root.id;
+      const markerLabel = node("label", "ไฟล์ marker บน NAS (เทียบจาก root)"); markerLabel.htmlFor = marker.id;
+      rootField.append(rootLabel, root); markerField.append(markerLabel, marker); row.append(rootField, markerField); $("automationMappings").append(row);
+    }
+    $("automationFields").replaceChildren();
+    for (const field of metadataFields) {
+      const label = node("label"); label.style.cssText = "display:flex;align-items:center;gap:6px";
+      const input = node("input"); input.type = "checkbox"; input.value = field; input.checked = (policy?.fields || metadataFields).includes(field); input.style.cssText = "width:16px;min-height:16px";
+      label.append(input, document.createTextNode(field)); $("automationFields").append(label);
+    }
+    clearActivity();
+  };
+  const loadAutomation = async () => {
+    const session = sessionToken;
+    const data = await apiAutomation("/libraries");
+    if (session !== sessionToken) return;
+    const previous = $("automationLibrary").value;
+    autoData = data;
+    $("automationAccount").textContent = !data.workerEnabled ? "Worker ปิดอยู่" : data.accountBlocked ? "บัญชีต้องเชื่อมต่อใหม่" : data.accountConnected ? "เชื่อมบัญชีงานเบื้องหลังแล้ว" : "ยังไม่ได้เชื่อมบัญชีงานเบื้องหลัง";
+    $("automationLibraries").replaceChildren(); $("automationLibrary").replaceChildren();
+    for (const library of data.libraries) {
+      const line = node("div", "", "check"), label = node("label"); label.style.cssText = "display:flex;align-items:center;gap:10px";
+      const select = node("input"); select.type = "checkbox"; select.value = String(library.id); select.dataset.runLibrary = "true"; select.checked = Boolean(library.policy); select.disabled = !library.policy; select.style.cssText = "width:18px;min-height:18px";
+      label.append(select, document.createTextNode(library.name));
+      const info = node("span", library.policy ? (library.policy.autoEnabled ? "Auto เปิด · สั่ง Manual ได้" : "Auto ปิด · สั่ง Manual ได้") : "รอตั้งค่าโฟลเดอร์", "status info");
+      if (library.nextDue) info.title = "รอบถัดไป " + new Date(library.nextDue * 1000).toLocaleString("th-TH");
+      line.append(label, info); $("automationLibraries").append(line);
+      $("automationLibrary").append(new Option(library.name, String(library.id)));
+    }
+    if (data.libraries.some(library => String(library.id) === previous)) $("automationLibrary").value = previous;
+    $("automationTools").hidden = !data.libraries.length;
+    renderPolicy();
+  };
+  const automationAction = (id, label, action) => work(id, label, async () => {
+    try { await action(); } catch (error) { say("automationMessage", error.message, "error"); }
+  });
+  $("loadAutomation").onclick = () => automationAction("loadAutomation", "กำลังโหลด…", loadAutomation);
+  $("bindAutomation").onclick = () => automationAction("bindAutomation", "กำลังเชื่อม…", async () => {
+    await apiAutomation("/account", { method: "PUT" }); await loadAutomation(); say("automationMessage", "ผูกบัญชีงานเบื้องหลังแล้ว เลือก Library เพื่อตั้งค่าได้", "success");
+  });
+  $("automationLibrary").onchange = () => { renderPolicy(); refreshActivity().catch(error => say("automationMessage", error.message, "error")); };
+  $("automationPolicyForm").onsubmit = event => {
+    event.preventDefault(); automationAction("saveAutomation", "กำลังบันทึก…", async () => {
+      const library = currentLibrary(); if (!library) return;
+      const mappings = Array.from($("automationMappings").querySelectorAll("select[data-path-id]")).filter(input => input.value !== "").map(input => ({ libraryPathId: Number(input.dataset.pathId), rootIndex: Number(input.value), marker: $("map-marker-" + input.dataset.pathId).value.trim() }));
+      const fields = Array.from($("automationFields").querySelectorAll("input:checked")).map(input => input.value);
+      if (!mappings.length || !fields.length) throw new Error("เลือกโฟลเดอร์อย่างน้อยหนึ่ง path และฟิลด์อย่างน้อยหนึ่งรายการ");
+      await apiAutomation(`/libraries/${library.id}`, { method: "PUT", body: JSON.stringify({ autoEnabled: $("automationAuto").checked, intervalSeconds: Number($("automationInterval").value), settleSeconds: library.policy?.settleSeconds || 30, sourcePreference: $("automationPreference").value, mappings, fields }) });
+      await loadAutomation(); say("automationMessage", "บันทึกแล้ว กดตรวจตอนนี้ได้ทั้งตอนเปิดและปิด Auto", "success");
+    });
+  };
+  $("runAutomation").onclick = () => automationAction("runAutomation", "กำลังเข้าคิว…", async () => {
+    const libraryIds = Array.from($("automationLibraries").querySelectorAll("input[data-run-library]:checked")).map(input => Number(input.value));
+    if (!libraryIds.length) throw new Error("เลือก Library ที่ตั้งค่าแล้วอย่างน้อยหนึ่งรายการ");
+    const result = await apiAutomation("/runs", { method: "POST", body: JSON.stringify({ libraryIds, mode: $("automationMode").value }) });
+    say("automationMessage", `เข้าคิวแล้ว ${result.runIds.length} Library · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์`, "success"); await refreshActivity();
+  });
+  const refreshActivity = async (summary = false) => {
+    const library = currentLibrary(); if (!library?.policy || activityLoading || !sessionToken || isPreviewMode) return;
+    activityLoading = true; const session = sessionToken, libraryId = library.id;
+    lastActivityPoll = Date.now();
+    try {
+      const endpoint = `/activity?library_id=${libraryId}`;
+      let data = await apiAutomation(endpoint + (summary ? "&summary=true" : "&compact=true"));
+      if (session !== sessionToken || currentLibrary()?.id !== libraryId) return;
+      const activityKey = runs => JSON.stringify([libraryId, ...runs.map(run => [run.id, run.state, run.updated_at])]);
+      const hasWork = runs => runs.some(run => ["running", "queued"].includes(run.state));
+      if (summary && !hasWork(data.runs) && lastFullActivity !== activityKey(data.runs)) {
+        data = await apiAutomation(endpoint + "&compact=true");
+        if (session !== sessionToken || currentLibrary()?.id !== libraryId) return;
+      }
+      activityHasWork = hasWork(data.runs);
+      const runs = $("automationRuns");
+      runs.replaceChildren(node("h3", "งานล่าสุดของ " + library.name));
+      for (const run of data.runs.slice(0, 5)) {
+        const line = node("div", "", "check");
+        line.append(node("strong", `${stateLabels[run.state] || run.state} · ${run.mode}`));
+        line.append(node("p", `ตรวจแล้ว ${run.result.checked || 0}${run.result.total !== undefined ? "/" + run.result.total : ""} เล่ม · ${new Date(run.updated_at * 1000).toLocaleString("th-TH")}`));
+        if (run.result.reason) line.append(node("p", reasonLabels[run.result.reason] || run.result.reason, "feedback"));
+        if (run.result.retryAt) line.append(node("p", "ลองใหม่ " + new Date(run.result.retryAt * 1000).toLocaleString("th-TH"), "helper"));
+        if (run.result.waitingForLibrary?.length) line.append(node("p", `รอ Grimmory เพิ่มเข้า Library ${run.result.waitingForLibrary.length} ไฟล์ (แสดงสูงสุด 100)`, "helper"));
+        if (["running", "queued"].includes(run.state)) {
+          const stop = node("button", "หยุดงานรอบนี้"); stop.onclick = async () => { stop.disabled = true; try { await apiAutomation(`/runs/${run.id}/stop`, { method: "POST" }); await refreshActivity(); } catch (error) { say("automationMessage", error.message, "error"); } }; line.append(stop);
+        }
+        runs.append(line);
+      }
+      if (!data.items) return;
+      lastFullActivity = activityKey(data.runs);
+      const area = $("automationResults");
+      const expanded = new Set(Array.from(area.querySelectorAll("details[open]"), detail => detail.dataset.activityKey));
+      area.replaceChildren();
+      area.append(node("h3", "ผลรายหนังสือ · ล่าสุดไม่เกิน 200 เล่ม"));
+      for (const item of data.items) {
+        const { title, state, cover } = item.result;
+        const details = node("details");
+        details.dataset.activityKey = String(item.book_id);
+        details.dataset.bookDetail = "";
+        const body = node("div");
+        details.append(node("summary", `${title || "หนังสือ #" + item.book_id} · ${stateLabels[state] || state} · ปก: ${cover === "pending" ? "รอนำเข้า" : "ไม่มี"}`), body);
+        let loaded = false, loading = false;
+        details.ontoggle = async () => {
+          if (!details.open) return;
+          for (const other of area.querySelectorAll("details[data-book-detail][open]")) {
+            if (other !== details) other.open = false;
+          }
+          if (loaded || loading) return;
+          loading = true;
+          body.replaceChildren(node("p", "กำลังโหลดรายละเอียด…", "helper"));
+          const bookEndpoint = `/libraries/${libraryId}/books/${item.book_id}`;
+          try {
+            const { result } = await apiAutomation(bookEndpoint + "/activity");
+            if (session !== sessionToken || !details.isConnected) return;
+            body.replaceChildren();
+            if (result.reason) body.append(node("p", reasonLabels[result.reason] || result.reason, "feedback"));
+            body.append(node("pre", JSON.stringify(result, null, 2)));
+            for (const field of Object.keys(result.conflicts || {})) {
+              const line = node("div", "", "actions");
+              line.append(node("span", field));
+              for (const [choice, label] of [["grimmory", "คงค่า Grimmory"], ["source", "ใช้ค่าจาก source"]]) {
+                const button = node("button", label);
+                button.onclick = async () => {
+                  button.disabled = true;
+                  try {
+                    await apiAutomation(bookEndpoint + "/resolve", { method: "POST", body: JSON.stringify({ fields: [field], choice, revision: result.revision }) });
+                    say("automationMessage", "รับคำสั่งแล้ว ระบบจะตรวจข้อมูลล่าสุดก่อนบันทึก", "success");
+                    await refreshActivity();
+                  } catch (error) {
+                    say("automationMessage", error.message, "error");
+                    button.disabled = false;
+                  }
+                };
+                line.append(button);
+              }
+              body.append(line);
+            }
+            loaded = true;
+          } catch (error) {
+            body.replaceChildren(node("p", error.message, "feedback"));
+          } finally { loading = false; }
+        };
+        area.append(details);
+        details.open = expanded.has(details.dataset.activityKey);
+      }
+      if (data.events?.length) {
+        const history = node("details"); history.dataset.activityKey = "history"; history.open = expanded.has("history"); history.append(node("summary", "ประวัติการทำงาน · ล่าสุดไม่เกิน 100 เหตุการณ์"));
+        for (const event of data.events) history.append(node("p", `${new Date(event.created_at * 1000).toLocaleString("th-TH")} · #${event.book_id} · ${stateLabels[event.result.state] || event.result.state}`, "helper"));
+        area.append(history);
+      }
+    } finally { activityLoading = false; }
+  };
+  $("refreshActivity").onclick = () => automationAction("refreshActivity", "กำลังโหลด…", refreshActivity);
+  setInterval(() => {
+    const interval = activityHasWork ? 5000 : 30000;
+    if (!$("metadata").hidden && !document.hidden && autoData && sessionToken && !isPreviewMode && Date.now() - lastActivityPoll >= interval) {
+      refreshActivity(true).catch(error => say("automationMessage", error.message, "error"));
+    }
+  }, 5000);
+  $("fileNotice").hidden = !isPreviewMode;
+  $("environment").textContent = isPreviewMode ? "UI PREVIEW" : (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "LOCAL WORKSPACE" : "LAN WORKSPACE");
+  showPage(); syncControls();
+})();
+</script>
+</body>
+</html>

@@ -108,6 +108,26 @@ class Settings(BaseSettings):
         default="sidecar",
         description="Metadata fallback strategy: sidecar or none",
     )
+    METADATA_IMPORT_ROOTS: list[str] = Field(
+        default_factory=list,
+        description="JSON list of local directories the authenticated metadata UI may scan",
+    )
+    LOCAL_METADATA_MAX_SOURCE_BYTES: int = Field(
+        default=2_097_152,
+        description="Maximum size of an OPF or metadata sidecar accepted by the local UI",
+    )
+    METADATA_KEY_FILE: str | None = Field(default=None, description="Encryption key file; defaults beside SQLite. Persist and back up with the database.")
+    METADATA_WORKER_ENABLED: bool = True
+    METADATA_MAX_BOOKS_PER_RUN: int = Field(default=50000, ge=1, le=1000000)
+
+    # LAN service discovery for the local metadata UI.
+    MDNS_ENABLED: bool = Field(default=True, description="Advertise the local UI over mDNS")
+    MDNS_HOSTNAME: str = Field(default="grimmlink.local", description="Local UI mDNS host name")
+    MDNS_SERVICE_NAME: str = Field(default="GrimmLink Adapter", description="Human-readable mDNS service name")
+    MDNS_IPV4: str | None = Field(
+        default=None,
+        description="LAN IPv4 address to publish in mDNS; set this when running in a container",
+    )
 
     # Migrations directory
     MIGRATIONS_DIR: str = Field(

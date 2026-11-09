@@ -102,7 +102,7 @@ async def test_progress_put_converts_percent_to_official_fraction() -> None:
     client = AsyncMock()
     client.get_koreader_progress.return_value = {}
     client.update_koreader_progress.return_value = {}
-    client.get_app_book_progress.return_value = {"readStatus": "UNREAD"}
+    client.get_book_by_id.return_value = {"readStatus": "UNREAD"}
     client.update_read_status.return_value = []
     with patch.object(
         ProgressService,
@@ -129,7 +129,7 @@ async def test_md5_pdf_without_book_id_uses_native_route_without_bearer_projecti
     client = AsyncMock()
     client.update_koreader_progress.return_value = {"status": "progress updated"}
     client.update_book_progress.return_value = {}
-    client.get_app_book_progress.return_value = {"readStatus": "UNREAD"}
+    client.get_book_by_id.return_value = {"readStatus": "UNREAD"}
     service = ProgressService(client)
     with patch.object(
         ProgressService,
@@ -145,12 +145,14 @@ async def test_md5_pdf_without_book_id_uses_native_route_without_bearer_projecti
         )
 
     assert result["status"] == "progress updated"
-    assert result["projection"] == "koreader-native+official-app+reading-status"
+    assert result["projection"] == "koreader-native+official-book-api+reading-status"
     resolve_book.assert_awaited_once_with(CREDS, "pdf-hash-missing-id", None)
     client.get_koreader_progress.assert_not_awaited()
     client.update_read_status.assert_awaited_once_with(25, "READING", "verified-bearer")
     client.update_book_progress.assert_awaited_once_with(
-        25, {"pdfProgress": {"page": 12, "percentage": pytest.approx(1.81)}}, "verified-bearer",
+        25, {"fileProgress": {
+            "bookFileId": 25, "positionData": "12", "progressPercent": pytest.approx(1.81),
+        }}, "verified-bearer",
     )
     client.update_koreader_progress.assert_awaited_once_with(
         {
@@ -236,9 +238,9 @@ async def test_newer_manual_status_blocks_progress_replay() -> None:
 
 
 @pytest.mark.asyncio
-async def test_bearer_progress_round_trips_through_official_app_projection() -> None:
+async def test_bearer_progress_round_trips_through_official_book_api() -> None:
     client = AsyncMock()
-    client.get_app_book_progress.return_value = {
+    client.get_book_by_id.return_value = {
         "lastReadTime": "2026-09-27T12:00:00Z",
         "pdfProgress": {"page": 55, "percentage": 22.0},
     }
@@ -254,13 +256,17 @@ async def test_bearer_progress_round_trips_through_official_app_projection() -> 
     assert result.bookId == 42
     assert result.currentPage == 55
     assert result.percentage == 22.0
-    client.get_app_book_progress.assert_awaited_once_with(42, "verified-bearer")
+    client.get_book_by_id.assert_awaited_once_with(42, "verified-bearer")
 
 
 @pytest.mark.asyncio
 async def test_bearer_progress_update_writes_pdf_projection() -> None:
     client = AsyncMock()
     client.update_book_progress.return_value = {}
+    client.get_book_by_id.side_effect = [
+        {"pdfProgress": {"page": 0, "percentage": 0.0}},
+        {"readStatus": "UNREAD"},
+    ]
     service = ProgressService(client)
     with patch.object(
         ProgressService,
@@ -277,9 +283,11 @@ async def test_bearer_progress_update_writes_pdf_projection() -> None:
             ),
             BEARER_CREDS,
         )
-    assert result["projection"] == "official-app"
+    assert result["projection"] == "official-book-api+reading-status"
     client.update_book_progress.assert_awaited_once_with(
-        42, {"pdfProgress": {"page": 55, "percentage": 22.0}}, "verified-bearer",
+        42, {"fileProgress": {
+            "bookFileId": 101, "positionData": "55", "progressPercent": 22.0,
+        }}, "verified-bearer",
     )
 
 
@@ -298,8 +306,8 @@ async def test_force_does_not_override_newer_manual_status() -> None:
     client.update_koreader_progress.assert_not_awaited()
 
 
-def test_app_percentages_are_already_display_units() -> None:
-    snapshot = ProgressService._app_progress_snapshot(
+def test_book_api_percentages_are_already_display_units() -> None:
+    snapshot = ProgressService._book_progress_snapshot(
         {"pdfProgress": {"page": 55, "percentage": 0.3303}},
         "pdf-subpercent", 42, 101,
     )
@@ -310,21 +318,21 @@ def test_app_percentages_are_already_display_units() -> None:
 def test_epub_projection_rejects_xpointer_and_accepts_cfi() -> None:
     with pytest.raises(HTTPException) as caught:
         ProgressService._projection_payload(ProgressSnapshot(
-            book_hash="epub-xpointer", format="EPUB", native_location="/6/4[chap03]",
+            book_hash="epub-xpointer", book_file_id=101, format="EPUB", native_location="/6/4[chap03]",
             display_percent=42.0,
         ))
     assert caught.value.status_code == 501
     payload = ProgressService._projection_payload(ProgressSnapshot(
-        book_hash="epub-cfi", format="EPUB", native_location="epubcfi(/6/4[chap03])",
+        book_hash="epub-cfi", book_file_id=101, format="EPUB", native_location="epubcfi(/6/4[chap03])",
         display_percent=42.0,
     ))
-    assert payload["epubProgress"]["cfi"].startswith("epubcfi(")
+    assert payload["fileProgress"]["positionData"].startswith("epubcfi(")
 
 
 @pytest.mark.asyncio
-async def test_bearer_stale_app_timestamp_returns_conflict() -> None:
+async def test_bearer_stale_book_api_timestamp_returns_conflict() -> None:
     client = AsyncMock()
-    client.get_app_book_progress.return_value = {
+    client.get_book_by_id.return_value = {
         "lastReadTime": "1970-01-01T00:03:20Z",
         "pdfProgress": {"page": 55, "percentage": 22.0},
     }

@@ -33,6 +33,7 @@ class GrimmlinkCapabilitiesResponse(BaseModel):
     readingSessions: bool = True
     metadataSync: bool = True
     shelves: bool = True
+    features: dict[str, Any] | None = None
 
 
 class GrimmlinkBookSummary(BaseModel):
@@ -417,6 +418,9 @@ class KoreaderProgressPayload(BaseModel):
     force: bool | None = None
     rawKoreaderLocation: str | None = None
     rawKoreaderProgress: str | None = None
+    cfi: str | None = None
+    xpointer: str | None = None
+    href: str | None = None
     source: str | None = None
     currentHash: str | None = None
     initialHash: str | None = None

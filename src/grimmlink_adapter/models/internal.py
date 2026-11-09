@@ -50,6 +50,9 @@ class ProgressSnapshot(BaseModel):
     book_file_id: int | None = None
     format: str | None = None
     native_location: str | None = None
+    cfi: str | None = None
+    xpointer: str | None = None
+    href: str | None = None
     current_page: int | None = None
     total_pages: int | None = None
     display_percent: float | None = None
@@ -70,7 +73,7 @@ class ProgressSnapshot(BaseModel):
     @property
     def is_fixed_page(self) -> bool:
         """Whether the snapshot uses fixed-page semantics."""
-        return (self.format or "").upper() in {"PDF", "CBZ", "CBR", "DJVU"}
+        return (self.format or "").upper() in {"PDF", "CBX", "CBZ", "CBR", "DJVU"}
 
 
 class OutboxAction(BaseModel):

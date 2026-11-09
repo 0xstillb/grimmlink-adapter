@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -28,7 +29,7 @@ from grimmlink_adapter.opf.parser import (
     grimmory_file_fingerprint,
     parse_opf,
 )
-from grimmlink_adapter.opf.sidecar import write_sidecars
+from grimmlink_adapter.opf.sidecar import parse_metadata_sidecar, write_sidecars
 from grimmlink_adapter.state.opf_ingestion import OPFStateStore
 
 
@@ -93,8 +94,11 @@ class OPFIngestionService:
         if not book_path.is_file():
             raise OPFIngestionError("Book target is not a regular file")
         before_hash = file_fingerprint(book_path)
-        resolved_opf = (opf_path or discover_opf(book_path, root=book_path.parent)).resolve(strict=True)
-        document = parse_opf(resolved_opf, root=book_path.parent)
+        resolved_metadata = (opf_path or discover_opf(book_path, root=book_path.parent)).resolve(strict=True)
+        if resolved_metadata.name.lower().endswith(".metadata.json"):
+            document = parse_metadata_sidecar(resolved_metadata, root=book_path.parent)
+        else:
+            document = parse_opf(resolved_metadata, root=book_path.parent)
         if document.cover_path:
             with document.cover_path.open("rb") as cover:
                 if cover.read(3) != b"\xff\xd8\xff":
@@ -159,6 +163,8 @@ class OPFIngestionService:
             book_target=book_path,
             book_id=identity["book_id"],
             fields_to_update=sorted(metadata_fields),
+            metadata_before={field: (book_detail.get("metadata") or {}).get(field) for field in metadata_fields},
+            metadata_after={field: metadata_fields[field] for field in metadata_fields},
             locked_fields=locked,
             cover_source=document.cover_path,
             primary_action="sidecar" if mode == "sidecar_only" else "official_api",
@@ -281,13 +287,15 @@ class OPFIngestionService:
     async def _resolve_identity(
         self, book_path: Path, bearer_token: str, requested_book_id: int | None,
     ) -> tuple[dict[str, int], dict[str, Any]]:
-        fingerprint = grimmory_file_fingerprint(book_path)
+        fingerprint = await asyncio.to_thread(grimmory_file_fingerprint, book_path)
         try:
             candidates = await self.identity_lookup.lookup_current_hash(fingerprint)
             if not candidates:
                 candidates = await self.identity_lookup.lookup_initial_hash(fingerprint)
         except GrimmoryIdentityLookupError as exc:
             raise OPFIdentityError("Read-only exact hash lookup is unavailable") from exc
+        if requested_book_id is not None:
+            candidates = [candidate for candidate in candidates if candidate.book_id == requested_book_id]
         if len(candidates) != 1:
             reason = "ambiguous" if candidates else "no exact hash match"
             raise OPFIdentityError(f"Cannot resolve OPF target: {reason}")

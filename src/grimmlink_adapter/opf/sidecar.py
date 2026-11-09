@@ -11,11 +11,50 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from grimmlink_adapter.models.opf_metadata import CanonicalMetadata
+from grimmlink_adapter.models.opf_metadata import CanonicalMetadata, OPFDocument
 
 
 class SidecarConflictError(Exception):
     """An existing sidecar is not owned by GrimmLink Adapter."""
+
+
+class InvalidMetadataSidecarError(ValueError):
+    """A metadata sidecar is malformed or references a path outside its root."""
+
+
+def parse_metadata_sidecar(
+    sidecar_path: Path, root: Path, *, payload: dict[str, Any] | None = None,
+) -> OPFDocument:
+    """Parse an Adapter metadata sidecar while constraining every path to root."""
+    root_path = root.resolve(strict=True)
+    source = sidecar_path.resolve(strict=True)
+    if not source.is_file() or not source.is_relative_to(root_path):
+        raise InvalidMetadataSidecarError("Metadata sidecar is outside the configured import root")
+    try:
+        if payload is None:
+            payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InvalidMetadataSidecarError("Metadata sidecar is unreadable or malformed") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("metadata"), dict):
+        raise InvalidMetadataSidecarError("Metadata sidecar must contain a metadata object")
+    try:
+        metadata = CanonicalMetadata.model_validate(payload["metadata"])
+    except Exception as exc:
+        raise InvalidMetadataSidecarError("Metadata sidecar contains unsupported metadata") from exc
+
+    cover_path: Path | None = None
+    cover = payload.get("cover")
+    if isinstance(cover, dict) and isinstance(cover.get("path"), str):
+        candidate = (source.parent / cover["path"]).resolve(strict=True)
+        if not candidate.is_file() or not candidate.is_relative_to(root_path):
+            raise InvalidMetadataSidecarError("Metadata sidecar cover path is outside the configured root")
+        cover_path = candidate
+    return OPFDocument(
+        source_path=source,
+        metadata=metadata,
+        cover_path=cover_path,
+        parsed_at=datetime.now(UTC),
+    )
 
 
 def sidecar_paths(book_path: Path) -> tuple[Path, Path]:

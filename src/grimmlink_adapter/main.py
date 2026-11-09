@@ -6,12 +6,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from grimmlink_adapter import __version__
-from grimmlink_adapter.api.router import api_router
+from grimmlink_adapter.api.router import api_router, api_v2_router
 from grimmlink_adapter.config import settings
 from grimmlink_adapter.security.masking import mask_secret, setup_secure_logging
+from grimmlink_adapter.services.mdns import MDNSAdvertiser
+from grimmlink_adapter.services.metadata_automation import metadata_automation
+from grimmlink_adapter.state.linked_accounts import LinkedAccountStore
 from grimmlink_adapter.state.migrations import apply_migrations
 
 logger = logging.getLogger(__name__)
@@ -29,12 +32,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("SQLite database path: %s", db_path)
     try:
         applied = await apply_migrations()
+        await LinkedAccountStore.encrypt_existing()
         logger.info("Applied %d database migration(s)", applied)
     except Exception as exc:
         logger.critical("Failed to apply database migrations during startup: %s", exc)
         raise
 
-    yield
+    mdns = MDNSAdvertiser()
+    await mdns.start()
+    app.state.mdns_advertiser = mdns
+
+    try:
+        await metadata_automation.start()
+        yield
+    finally:
+        await metadata_automation.stop()
+        await mdns.stop()
+        app.state.mdns_advertiser = None
 
     logger.info("Shutting down GrimmLink Adapter")
 
@@ -75,8 +89,13 @@ def create_app() -> FastAPI:
             "version": __version__,
         }
 
+    @application.get("/", include_in_schema=False)
+    async def home() -> RedirectResponse:
+        return RedirectResponse(url="/api/grimmlink/v2/local/metadata", status_code=307)
+
     # Mount legacy GrimmLink compatibility router
     application.include_router(api_router)
+    application.include_router(api_v2_router)
 
     return application
 

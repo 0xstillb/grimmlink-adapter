@@ -1,13 +1,18 @@
 """Contract tests ensuring legacy GrimmLink wire contract endpoints exist and match signatures."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from fastapi.responses import JSONResponse, Response
 from httpx import AsyncClient
+from pydantic import SecretStr
 
+from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.internal import BookHashEntry
 from grimmlink_adapter.official.exceptions import OfficialAuthError
+from grimmlink_adapter.security.auth_extractor import ClientCredentials, require_v2_credentials
 from grimmlink_adapter.state.cache import BookHashCache
 
 AUTH_HEADERS = {
@@ -85,6 +90,98 @@ async def test_capabilities_endpoint_contract(test_client: AsyncClient) -> None:
     assert data["metadataSync"] is True
     assert data["pdfBridge"] is True
     assert data["shelves"] is True
+
+
+@pytest.mark.asyncio
+async def test_v2_capabilities_expose_first_sync_and_network_scopes(
+    test_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "GRIMMORY_DB_ENABLED", True)
+    monkeypatch.setattr(settings, "GRIMMORY_DB_HOST", "mariadb")
+    monkeypatch.setattr(settings, "GRIMMORY_DB_USER", "readonly")
+    monkeypatch.setattr(settings, "GRIMMORY_DB_PASSWORD", SecretStr("secret"))
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", ["/imports"])
+
+    resp = await test_client.get("/api/grimmlink/v2/capabilities")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["apiVersion"] == "v2"
+    assert data["features"]["firstSyncHashLookup"] is True
+    assert data["features"]["metadataImportConfigured"] is True
+    assert data["features"]["metadataNetworkScopes"] == {
+        "readerPersonalMetadata": "public-authenticated",
+        "sharedBookMetadata": "lan-only",
+        "opfSidecarManagement": "lan-only",
+    }
+
+
+@pytest.mark.asyncio
+async def test_v2_capabilities_do_not_claim_incomplete_hash_lookup(
+    test_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "GRIMMORY_DB_ENABLED", True)
+    monkeypatch.setattr(settings, "GRIMMORY_DB_HOST", None)
+
+    resp = await test_client.get("/api/grimmlink/v2/capabilities")
+
+    assert resp.status_code == 200
+    assert resp.json()["features"]["firstSyncHashLookup"] is False
+
+
+@pytest.mark.asyncio
+async def test_v2_does_not_publish_legacy_aliases_or_magic_shelf_routes(
+    test_client: AsyncClient,
+) -> None:
+    magic_route = await test_client.get("/api/grimmlink/v2/shelves/magic/100/books")
+    legacy_status_route = await test_client.put(
+        "/api/grimmlink/v2/books/42/status", json={"status": "READING"},
+    )
+    legacy_v1_route = await test_client.get("/api/grimmlink/v1/shelves/magic/100/books")
+
+    assert magic_route.status_code == 404
+    assert legacy_status_route.status_code == 404
+    assert legacy_v1_route.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_v2_download_requires_hash_to_resolve_to_requested_book(
+    test_client: AsyncClient,
+) -> None:
+    app = test_client._transport.app
+    app.dependency_overrides[require_v2_credentials] = lambda: ClientCredentials(bearer_token="token")
+    with (
+        patch(
+            "grimmlink_adapter.api.v2.get_book_by_hash",
+            new=AsyncMock(side_effect=[
+                SimpleNamespace(id=99),
+                SimpleNamespace(id=42),
+                JSONResponse(content={"id": 42}),
+            ]),
+        ) as resolve,
+        patch(
+            "grimmlink_adapter.api.v2.download_book",
+            new=AsyncMock(return_value=Response(content=b"book")),
+        ) as download,
+    ):
+        missing_hash = await test_client.get("/api/grimmlink/v2/books/42/content")
+        assert missing_hash.status_code == 422
+
+        mismatch = await test_client.get("/api/grimmlink/v2/books/42/content?hash=abc123")
+        assert mismatch.status_code == 409
+        download.assert_not_awaited()
+
+        matched = await test_client.get("/api/grimmlink/v2/books/42/content?hash=abc123")
+        assert matched.status_code == 200
+        assert matched.content == b"book"
+        minimal_identity = await test_client.get(
+            "/api/grimmlink/v2/books/42/content?hash=abc123",
+        )
+        assert minimal_identity.status_code == 200
+        assert minimal_identity.content == b"book"
+        assert resolve.await_count == 3
+        assert download.await_count == 2
+        download.assert_awaited_with(42, ClientCredentials(bearer_token="token"))
 
 
 @pytest.mark.asyncio
