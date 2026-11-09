@@ -47,19 +47,33 @@ async def collect_diagnostics(mdns_status: dict[str, Any] | None = None) -> dict
             connection.row_factory = aiosqlite.Row
             async with connection.execute("SELECT state,COUNT(*) AS count,MAX(updated_at) AS last_activity FROM metadata_runs WHERE server=? GROUP BY state", (settings.GRIMMORY_BASE_URL.rstrip("/"),)) as cursor:
                 rows = [dict(row) for row in await cursor.fetchall()]
-            async with connection.execute("SELECT COUNT(*) AS count FROM metadata_accounts WHERE server=? AND blocked_reason IS NOT NULL", (settings.GRIMMORY_BASE_URL.rstrip("/"),)) as cursor:
-                accounts = [dict(row) for row in await cursor.fetchall()]
-        checks.append(_check("metadataWorker", "warning" if accounts[0]["count"] else "info",
-                             "Metadata automation queue summary (no field values or credentials).",
+            async with connection.execute("SELECT COUNT(*) AS total, SUM(CASE WHEN blocked_reason IS NOT NULL THEN 1 ELSE 0 END) AS blocked FROM metadata_accounts WHERE server=?", (settings.GRIMMORY_BASE_URL.rstrip("/"),)) as cursor:
+                account_row = await cursor.fetchone()
+                account = dict(account_row) if account_row else {"total": 0, "blocked": 0}
+            async with connection.execute("SELECT COUNT(*) FROM metadata_libraries WHERE server=?", (settings.GRIMMORY_BASE_URL.rstrip("/"),)) as cursor:
+                library_row = await cursor.fetchone()
+                library_count = library_row[0] if library_row else 0
+        connected = account["total"] or 0
+        blocked = account["blocked"] or 0
+        if blocked:
+            status, summary, action = "warning", "บัญชีงาน Metadata บางบัญชีต้องเชื่อมต่อใหม่", "เปิดหน้า Metadata แล้วเชื่อมบัญชีงานเบื้องหลังใหม่"
+        elif library_count and not settings.METADATA_WORKER_ENABLED:
+            status, summary, action = "warning", "Worker ของ Metadata ปิดอยู่", "เปิด METADATA_WORKER_ENABLED เพื่อให้ Auto และงาน Manual ทำงาน"
+        elif library_count and not connected:
+            status, summary, action = "warning", "ยังไม่ได้เชื่อมบัญชีงาน Metadata เบื้องหลัง", "เปิดหน้า Metadata แล้วกดเชื่อมบัญชีงานเบื้องหลัง"
+        elif connected and settings.METADATA_WORKER_ENABLED:
+            status, summary, action = "ok", "Worker พร้อมทำงาน ทั้ง Auto และการนำเข้า Manual", None
+        else:
+            status, summary, action = "info", "ยังไม่มี Library ที่ตั้งงาน Metadata", None
+        checks.append(_check("metadataWorker", status, summary, action,
                              workerEnabled=settings.METADATA_WORKER_ENABLED, queue=rows,
-                             blockedAccounts=accounts[0]["count"]))
+                             connectedAccounts=connected, blockedAccounts=blocked, configuredLibraries=library_count))
     except Exception as exc:
         checks.append(_check("metadataWorker", "warning", "Metadata automation state is unavailable.",
                              "Start the Adapter to apply its database migrations.", errorCode=type(exc).__name__))
     checks.append(_check(
         "sessionRuntime", "info",
-        "Adapter bearer sessions are held in process memory and expire after eight hours.",
-        "Use one worker and one replica; restarting the Adapter requires readers to sign in again.",
+        "เซสชันหน้าเว็บมีอายุ 8 ชั่วโมง; งาน Auto ใช้บัญชีเบื้องหลังแยกต่างหาก",
     ))
 
     if mdns_status is None:
@@ -149,13 +163,14 @@ def _check_metadata_roots() -> dict[str, Any]:
     if unavailable:
         return _check("metadataRoots", "fail", "One or more metadata folders are unavailable to the Adapter.", "Check the container volume mapping and folder permissions.", roots=roots)
     readonly = sum(not item["writable"] for item in roots)
-    if readonly:
+    needs_sidecar_write = settings.METADATA_INGESTION_MODE == "sidecar_only" or (settings.METADATA_INGESTION_MODE == "api_preferred" and settings.METADATA_FALLBACK == "sidecar")
+    if readonly and needs_sidecar_write:
         return _check(
-            "metadataRoots", "warning", "Metadata folders are readable, but sidecar fallback cannot write beside books.",
-            "This is fine for API-only metadata updates. If you need sidecar fallback, mount the selected folder writable.",
+            "metadataRoots", "warning", "อ่านโฟลเดอร์ Metadata ได้ แต่โหมด sidecar ต้องเขียนไฟล์ข้างหนังสือ",
+            "ให้สิทธิ์เขียนโฟลเดอร์ NAS ที่เลือก หรือเปลี่ยนเป็นโหมดอัปเดตผ่าน API",
             roots=roots,
         )
-    return _check("metadataRoots", "ok", "All configured metadata folders are readable.", roots=roots)
+    return _check("metadataRoots", "ok", "โฟลเดอร์ Metadata อ่านได้และพร้อมใช้งาน" if not readonly else "โฟลเดอร์ NAS อ่านได้ พร้อมอัปเดต Metadata ผ่าน API", roots=roots)
 
 
 def _check_prose_converter() -> dict[str, Any]:

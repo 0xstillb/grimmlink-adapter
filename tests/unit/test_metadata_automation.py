@@ -235,6 +235,21 @@ async def test_diagnostics_does_not_create_missing_state_database(metadata_db, m
     assert not absent.exists()
 
 
+def test_readonly_nas_is_ready_for_api_only_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import os
+
+    from grimmlink_adapter.services import diagnostics
+
+    original_access = diagnostics.os.access
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
+    monkeypatch.setattr(settings, "METADATA_INGESTION_MODE", "api_only")
+    monkeypatch.setattr(settings, "METADATA_FALLBACK", "none")
+    monkeypatch.setattr(diagnostics.os, "access", lambda path, mode: False if mode == os.W_OK else original_access(path, mode))
+    assert diagnostics._check_metadata_roots()["status"] == "ok"
+    monkeypatch.setattr(settings, "METADATA_INGESTION_MODE", "sidecar_only")
+    assert diagnostics._check_metadata_roots()["status"] == "warning"
+
+
 @pytest_asyncio.fixture
 async def configured_book(metadata_db, monkeypatch: pytest.MonkeyPatch):
     root = metadata_db / "nas"

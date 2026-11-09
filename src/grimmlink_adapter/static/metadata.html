@@ -462,6 +462,13 @@
     .check-title { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 6px; align-items: center; }
     .check-title strong { font-size: var(--fs-md); font-weight: 600; line-height: var(--lh-snug); color: var(--text-strong); }
     .check p { font-size: var(--fs-sm); line-height: var(--lh-base); color: var(--text-dim); margin: 6px 0; }
+    .run-progress { margin: 14px 0 10px; }
+    .run-progress-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; color: var(--text-strong); font-size: var(--fs-sm); }
+    .run-progress-head strong { color: #fcd34d; font-variant-numeric: tabular-nums; }
+    .run-progress progress { display: block; width: 100%; height: 12px; margin-top: 8px; appearance: none; border: 1px solid rgba(167, 139, 250, .32); border-radius: 999px; overflow: hidden; background: rgba(11, 6, 35, .75); }
+    .run-progress progress::-webkit-progress-bar { background: rgba(11, 6, 35, .75); }
+    .run-progress progress::-webkit-progress-value { background: linear-gradient(90deg, #8b5cf6, #f59e0b); border-radius: 999px; }
+    .run-progress progress::-moz-progress-bar { background: linear-gradient(90deg, #8b5cf6, #f59e0b); border-radius: 999px; }
     .check p.next-action {
       color: #f8bd8b; padding: var(--sp-3) var(--sp-4); margin-top: 10px; font-size: var(--fs-sm); line-height: var(--lh-base);
       background: linear-gradient(90deg, rgba(249, 115, 22, .18), rgba(249, 115, 22, .03));
@@ -687,7 +694,7 @@
   const busy = new Set();
   const names = { setup: "ตั้งค่า", diagnostics: "ตรวจสอบระบบ", metadata: "Metadata" };
   const statusNames = { ok: "พร้อมใช้งาน", ready: "ตรวจสอบผ่าน", warning: "ควรตรวจสอบ", needs_setup: "มีค่าที่ต้องตรวจสอบ", fail: "พบปัญหา", failed: "พบปัญหา", info: "ข้อมูลเพิ่มเติม" };
-  const checkNames = { adapter: "GrimmLink Adapter", adapterDatabase: "ฐานข้อมูล Adapter", grimmoryApi: "Grimmory API", grimmoryIdentityDatabase: "ฐานข้อมูลจับคู่หนังสือ", metadataRoots: "โฟลเดอร์ Metadata", sessionRuntime: "เซสชันและการทำงาน", mdns: "การค้นหาใน LAN · mDNS" };
+  const checkNames = { adapter: "GrimmLink Adapter", adapterDatabase: "ฐานข้อมูล Adapter", grimmoryApi: "Grimmory API", grimmoryIdentityDatabase: "ฐานข้อมูลจับคู่หนังสือ", metadataRoots: "โฟลเดอร์ Metadata", metadataWorker: "งาน Metadata เบื้องหลัง", sessionRuntime: "เซสชันหน้าเว็บ", mdns: "การค้นหาใน LAN · mDNS" };
   const say = (id, text, tone = "") => { $(id).textContent = text; $(id).dataset.tone = tone; };
   const headers = () => ({ Authorization: `Bearer ${sessionToken}`, "Content-Type": "application/json" });
   const selected = () => $("source").value === "" ? null : sources[Number($("source").value)];
@@ -1020,8 +1027,25 @@
       runs.replaceChildren(node("h3", "งานล่าสุดของ " + library.name));
       for (const run of data.runs.slice(0, 5)) {
         const line = node("div", "", "check");
-        line.append(node("strong", `${stateLabels[run.state] || run.state} · ${run.mode}`));
-        line.append(node("p", `ตรวจแล้ว ${run.result.checked || 0}${run.result.total !== undefined ? "/" + run.result.total : ""} เล่ม · ${new Date(run.updated_at * 1000).toLocaleString("th-TH")}`));
+        const manual = run.requested_by !== "auto";
+        line.append(node("strong", `${manual ? "นำเข้า Metadata ด้วยมือ" : "ตรวจ Auto"} · ${stateLabels[run.state] || run.state}`));
+        const checked = Math.max(0, Number(run.result.checked) || 0);
+        const total = Number(run.result.total);
+        const hasTotal = run.result.total !== undefined && Number.isFinite(total) && total >= 0;
+        const percent = hasTotal ? total === 0 ? 100 : Math.min(100, Math.round(checked / total * 100)) : null;
+        const phase = run.state === "completed" ? "จบรอบตรวจ" : run.state === "blocked" ? "งานหยุดเพราะต้องแก้ไข" : run.state === "cancelled" ? "หยุดงานแล้ว" : run.result.phase === "discovery" ? "กำลังนับหนังสือใน Library" : run.result.phase === "waiting_retry" ? "รอตรวจซ้ำ" : run.state === "queued" ? "รอเริ่มงาน" : "กำลังตรวจ Metadata";
+        const progressBox = node("div", "", "run-progress"), progressHead = node("div", "", "run-progress-head"), meter = document.createElement("progress");
+        const terminal = !["queued", "running"].includes(run.state);
+        progressHead.append(node("span", hasTotal ? `ตรวจแล้ว ${checked.toLocaleString("th-TH")} / ${total.toLocaleString("th-TH")} เล่ม` : phase), node("strong", percent === null ? terminal ? "—" : "กำลังเตรียม…" : `${percent}%`));
+        meter.max = 100; if (percent !== null) meter.value = percent; else if (terminal) meter.value = 0;
+        meter.setAttribute("aria-label", `${manual ? "นำเข้า Metadata" : "ตรวจ Auto"}: ${hasTotal ? `ตรวจแล้ว ${checked} จาก ${total} เล่ม ${percent}%` : phase}`);
+        progressBox.append(progressHead, meter); line.append(progressBox);
+        if (hasTotal) {
+          const counts = run.result.counts || {};
+          const outcomes = [["อัปเดตแล้ว", counts.updated], ["ข้อมูลตรงกัน", counts.in_sync], ["ไม่มีไฟล์ Metadata", counts.no_source], ["รอไฟล์นิ่ง", counts.waiting_stable], ["ต้องตรวจสอบ", counts.blocked], ["ผิดพลาด", counts.failed]].filter(([, count]) => count > 0).map(([label, count]) => `${label} ${count}`);
+          line.append(node("p", `${phase}${outcomes.length ? " · " + outcomes.join(" · ") : ""}`, "helper"));
+        }
+        line.append(node("p", `อัปเดตล่าสุด ${new Date(run.updated_at * 1000).toLocaleString("th-TH")}`, "helper"));
         if (run.result.reason) line.append(node("p", reasonLabels[run.result.reason] || run.result.reason, "feedback"));
         if (run.result.retryAt) line.append(node("p", "ลองใหม่ " + new Date(run.result.retryAt * 1000).toLocaleString("th-TH"), "helper"));
         if (run.result.waitingForLibrary?.length) line.append(node("p", `รอ Grimmory เพิ่มเข้า Library ${run.result.waitingForLibrary.length} ไฟล์ (แสดงสูงสุด 100)`, "helper"));
