@@ -2,7 +2,7 @@
 # The NAS host mount and read-only Grimmory DB account already exist on the Pi.
 services:
   grimmlink-adapter:
-    image: ghcr.io/0xstillb/grimmlink-adapter:0.1.4
+    image: ghcr.io/0xstillb/grimmlink-adapter:0.1.5
     container_name: grimmlink-adapter
     restart: unless-stopped
     network_mode: host

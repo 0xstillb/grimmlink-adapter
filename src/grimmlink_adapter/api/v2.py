@@ -461,7 +461,7 @@ def _source_books(source: Path) -> list[Path]:
 @router.get("/local/metadata", include_in_schema=False)
 async def local_metadata_ui() -> FileResponse:
     page = Path(__file__).resolve().parent.parent / "static" / "metadata.html"
-    return FileResponse(page, media_type="text/html; charset=utf-8")
+    return FileResponse(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/local/diagnostics")

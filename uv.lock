@@ -305,7 +305,7 @@ wheels = [
 
 [[package]]
 name = "grimmlink-adapter"
-version = "0.1.0"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "aiomysql" },
