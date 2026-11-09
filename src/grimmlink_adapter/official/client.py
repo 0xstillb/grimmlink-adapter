@@ -959,7 +959,10 @@ class OfficialGrimmoryClient:
             )
         return self._parse_json(resp, "GET", url)
 
-    async def metadata_read(self, path: str, bearer_token: str, params: dict[str, Any] | None = None) -> Any:
+    async def metadata_read(
+        self, path: str, bearer_token: str, params: dict[str, Any] | None = None,
+        *, expected_shape: Literal["object", "array"] = "object",
+    ) -> dict[str, Any] | list[Any]:
         """Explicit-token reads with no implicit switch to another JWT identity."""
         resp = await self._send_request(method="GET", path=path, auth_mode=AuthMode.NONE,
                                         headers={"Authorization": f"Bearer {bearer_token}"}, params=params)
@@ -967,10 +970,10 @@ class OfficialGrimmoryClient:
             raise OfficialAuthError("Metadata account needs authorization", status_code=resp.status_code)
         if resp.status_code != 200:
             raise OfficialBadResponseError("Metadata discovery failed", status_code=resp.status_code)
-        return self._parse_json(resp, "GET", path)
+        return self._parse_json(resp, "GET", path, expected_shape=expected_shape)
 
     async def get_libraries(self, bearer_token: str) -> list[dict[str, Any]]:
-        data = await self.metadata_read("/api/v1/libraries", bearer_token)
+        data = await self.metadata_read("/api/v1/libraries", bearer_token, expected_shape="array")
         if not isinstance(data, list) or any(not isinstance(x, dict) or not isinstance(x.get("id"), int) for x in data):
             raise OfficialBadResponseError("Malformed library list")
         return data
