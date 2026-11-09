@@ -1,7 +1,7 @@
 """Versioned v2 routes and aliases for the GrimmLink client contract."""
 
 import json
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -43,6 +43,7 @@ from grimmlink_adapter.services.opf_ingestion import (
     OPFSourceMutationProtectionError,
 )
 from grimmlink_adapter.services.progress_service import ProgressService, snapshot_from_official
+from grimmlink_adapter.services.prose_converter import prose_converter
 from grimmlink_adapter.services.request_auth import get_official_bearer
 from grimmlink_adapter.services.shelf_service import ShelfService
 from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSessionStore
@@ -188,64 +189,106 @@ async def get_v2_progress(
     reader: str = Query(..., pattern="^(koreader|readest)$"),
     creds: ClientCredentials = Depends(require_v2_credentials),
 ) -> dict[str, object]:
-    if reader == "koreader":
-        # KOReader needs its native XPointer/page cursor. Grimmory's Book DTO
-        # carries CFI for Readest, but does not guarantee an XPointer.
-        native = await _progress_service.get_native_progress(book_hash, creds)
-        snapshot = snapshot_from_official(native, book_hash)
-        if snapshot is None:
-            raise HTTPException(status_code=404, detail="No progress found for book hash.")
-        position = V2ProgressPosition(
-            format=snapshot.format or "EPUB",
-            cfi=snapshot.cfi,
-            xpointer=snapshot.xpointer,
-            href=snapshot.href,
-            page=snapshot.current_page,
-            totalPages=snapshot.total_pages,
-        )
-        return {
-            "status": "ok",
-            "bookHash": book_hash,
-            "fraction": (snapshot.display_percent or 0.0) / 100.0,
-            "updatedAt": snapshot.updated_at,
-            "position": position.model_dump(exclude_none=True),
-            "reader": reader,
-        }
-
-    progress = await _progress_service.get_progress(book_hash, creds)
+    progress = None
+    try:
+        progress = await _progress_service.get_progress(book_hash, creds)
+    except HTTPException as exc:
+        if exc.status_code != 404 and not (reader == "koreader" and exc.status_code == 501):
+            raise
     native_snapshot = None
     if creds.username and creds.md5_key:
         try:
             native = await _progress_service.get_native_progress(book_hash, creds)
             native_snapshot = snapshot_from_official(native, book_hash)
+            if native_snapshot is not None and native_snapshot.xpointer is None:
+                native_location = native_snapshot.native_location or ""
+                if native_location.startswith("/body") and "/DocFragment" in native_location:
+                    native_snapshot.xpointer = native_location
         except HTTPException as exc:
             if exc.status_code != 404:
                 raise
-    position = V2ProgressPosition(
-        format=progress.fileFormat or progress.format or "EPUB",
-        cfi=progress.cfi,
-        xpointer=(native_snapshot.xpointer if native_snapshot else None) or progress.xpointer,
-        href=progress.href,
-        page=(
-            native_snapshot.current_page
-            if native_snapshot and native_snapshot.current_page is not None
-            else progress.currentPage
-        ),
-        totalPages=(
-            native_snapshot.total_pages
-            if native_snapshot and native_snapshot.total_pages is not None
-            else progress.totalPages
-        ),
+    if progress is None and native_snapshot is None:
+        raise HTTPException(status_code=404, detail="No progress found for book hash.")
+    if progress is None and native_snapshot is not None and native_snapshot.format is None:
+        try:
+            _, _, _, mapped_format = await _progress_service._resolve_bearer_book(creds, book_hash)
+            native_snapshot.format = mapped_format
+        except HTTPException as exc:
+            if exc.status_code not in (404, 501):
+                raise
+
+    book_time = _progress_time(progress.updatedAt if progress else None)
+    native_time = native_snapshot.timestamp_epoch if native_snapshot else None
+    # Prefer the target reader's own locator when the two writes have equal or
+    # unknown timestamps. Never combine locators from different reading events.
+    book_is_newer = (
+        progress is not None and (native_snapshot is None or
+        (book_time is not None and native_time is not None and book_time > native_time))
     )
-    # KOReader consumes the native XPointer/page fields; Readest consumes CFI/href.
+    native_is_newer = (
+        native_snapshot is not None and (progress is None or
+        (book_time is not None and native_time is not None and native_time > book_time))
+    )
+    preferred = progress if reader == "readest" else native_snapshot
+    if reader == "readest" and native_is_newer:
+        preferred = native_snapshot
+    if reader == "koreader" and book_is_newer:
+        preferred = progress
+    assert preferred is not None
+    fmt = (
+        (progress.fileFormat or progress.format) if progress else None
+    ) or (native_snapshot.format if native_snapshot else None)
+    if not fmt and native_snapshot is not None and native_snapshot.xpointer:
+        fmt = "EPUB"
+    if not fmt:
+        raise HTTPException(status_code=501, detail="A verified file format is required for this progress position.")
+    fmt = fmt.upper()
+    cfi = preferred.cfi
+    xpointer = preferred.xpointer
+    page = preferred.currentPage if isinstance(preferred, KoreaderProgressPayload) else preferred.current_page
+    total_pages = preferred.totalPages if isinstance(preferred, KoreaderProgressPayload) else preferred.total_pages
+    href = preferred.href
+    percentage = preferred.percentage if isinstance(preferred, KoreaderProgressPayload) else preferred.display_percent
+    updated_at = preferred.updatedAt if isinstance(preferred, KoreaderProgressPayload) else preferred.updated_at
+    if fmt in {"PDF", "CBZ", "CBR", "DJVU"} and page is None:
+        page_location = preferred.progress if isinstance(preferred, KoreaderProgressPayload) else preferred.native_location
+        if page_location and str(page_location).isdigit() and int(page_location) >= 1:
+            page = int(page_location)
+    if fmt == "EPUB":
+        if reader == "koreader" and not xpointer and cfi:
+            xpointer = await prose_converter.convert(book_hash, "cfi", cfi, creds)
+        elif reader == "readest" and not cfi and xpointer:
+            cfi = await prose_converter.convert(book_hash, "xpointer", xpointer, creds)
+        if (reader == "koreader" and not xpointer) or (reader == "readest" and not cfi):
+            raise HTTPException(
+                status_code=424,
+                detail="The newest EPUB position could not be converted for this reader; an older page was not returned.",
+            )
+    position = V2ProgressPosition(
+        format=fmt, cfi=cfi, xpointer=xpointer, href=href,
+        page=page, totalPages=total_pages,
+    )
     return {
         "status": "ok",
         "bookHash": book_hash,
-        "fraction": (progress.percentage or 0.0) / 100.0,
-        "updatedAt": progress.updatedAt,
+        "fraction": (percentage or 0.0) / 100.0,
+        "updatedAt": updated_at,
         "position": position.model_dump(exclude_none=True),
         "reader": reader,
+        "source": "book-api" if isinstance(preferred, KoreaderProgressPayload) else "koreader-native",
     }
+
+
+def _progress_time(value: str | datetime | None) -> int | None:
+    if isinstance(value, datetime):
+        return int((value if value.tzinfo else value.replace(tzinfo=UTC)).timestamp())
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return int((parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).timestamp())
+        except ValueError:
+            return None
+    return None
 
 
 @router.put("/progress/{book_hash}")
@@ -255,18 +298,34 @@ async def put_v2_progress(
     creds: ClientCredentials = Depends(require_v2_credentials),
 ) -> dict[str, object]:
     position = request.position
+    fmt = position.format.upper()
+    conversion = "not-needed"
+    if fmt == "EPUB":
+        if request.source == "koreader":
+            if not position.xpointer:
+                raise HTTPException(status_code=422, detail="KOReader EPUB progress requires an XPointer.")
+            cfi = await prose_converter.convert(book_hash, "xpointer", position.xpointer, creds)
+            position = position.model_copy(update={"cfi": cfi})
+            conversion = "synced" if cfi else "failed"
+        else:
+            if not position.cfi:
+                raise HTTPException(status_code=422, detail="Readest EPUB progress requires a CFI.")
+            xpointer = await prose_converter.convert(book_hash, "cfi", position.cfi, creds)
+            position = position.model_copy(update={"xpointer": xpointer})
+            conversion = "synced" if xpointer else "failed"
     location = position.xpointer or position.cfi
-    if position.page is not None:
+    fixed_page = fmt in {"PDF", "CBZ", "CBR", "DJVU"}
+    if position.page is not None and fixed_page:
         location = str(position.page)
     payload = KoreaderProgressPayload(
         document=book_hash,
         bookHash=book_hash,
-        fileFormat=position.format.upper(),
+        fileFormat=fmt,
         percentage=request.fraction * 100.0,
         progress=location,
         location=location,
-        currentPage=position.page,
-        totalPages=position.totalPages,
+        currentPage=position.page if fixed_page else None,
+        totalPages=position.totalPages if fixed_page else None,
         cfi=position.cfi,
         xpointer=position.xpointer,
         href=position.href,
@@ -292,7 +351,7 @@ async def put_v2_progress(
         else "skipped"
     )
     readest_written = "official-book-api" in projection
-    has_readest_position = bool(position.cfi or position.page is not None)
+    has_readest_position = bool(position.cfi or (fixed_page and position.page is not None))
     read_status = result.get("readStatus")
     if not isinstance(read_status, dict):
         read_status = {
@@ -303,6 +362,7 @@ async def put_v2_progress(
     return {
         **result,
         "operationId": str(request.operationId),
+        "epubConversion": conversion,
         "nativeSync": {
             "status": native_status,
             "reader": "koreader",

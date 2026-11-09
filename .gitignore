@@ -53,6 +53,7 @@ htmlcov/
 .ruff_cache/
 .mypy_cache/
 .test-tmp/
+prose_converter/node_modules/
 *.metadata.key
 
 # IDE & Editors

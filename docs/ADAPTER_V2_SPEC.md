@@ -49,7 +49,8 @@ flowchart LR
 
 - **Required for v2:** regular shelf listing and membership sync, including add/remove, multi-shelf local ownership safety, and reliable reconciliation after reconnect. This is a primary user workflow and must be complete before v2 is considered ready.
 - **Optional for v2:** magic shelf listing and its rule-derived membership. Magic shelves are used less often and may depend on `/api/v1/app/**`; their migration must not block regular shelf sync or the v2 release.
-- **Optional for v2:** projection into Grimmory's built-in Web Reader. The required reading workflow is KOReader ↔ Readest; Web Reader CFI projection must not block v2 readiness.
+- **Required for v2:** consume a newer EPUB CFI already saved by Grimmory Web Reader through the Book API and convert it for KOReader on the next Adapter pull.
+- **Optional for v2:** proactively writing a KOReader/Readest position into Grimmory's built-in Web Reader beyond the normal Book API progress write.
 
 ## 3. Grimmory `develop` findings that affect the design
 
@@ -78,8 +79,8 @@ Source references on Grimmory `develop`: [`BookController`](https://github.com/g
 | Book identity | Reuse a validated mapping when available. For a first-seen hash on stock Grimmory, query exact `current_hash` then `initial_hash` through the configured SELECT-only lookup, then verify book/file identity and access through the Book API. Native KOReader progress alone is insufficient because its stock response has no `bookId`. | Adapter identity cache; read-only Grimmory MariaDB identity lookup; `GET /api/v1/books/{bookId}` | Stable, access-checked book/file identity for progress, download, and shelf operations. Without a verified mapping or configured hash lookup, first sync returns an explicit unresolved/unsupported result; it must not guess from a title or shelf listing. |
 | Book download | The client supplies both `bookId` and the file `hash`. Resolve the hash for the authenticated user and reject the request unless it maps to that same book ID, then stream the file without changing its bytes. | Adapter identity resolver; Grimmory book download API | KOReader/Readest receives the content whose identity it requested. |
 | KOReader progress | Preserve the KOReader XPointer string and fractional progress; use Grimmory's native KOReader push/pull API for native sync. | `PUT/GET /api/koreader/syncs/progress` | KOReader devices round-trip the same native position and device metadata. |
-| Readest progress (**required**) | Preserve Readest CFI/href; use the fork's existing CFI↔XPointer helper to exchange positions with KOReader. Keep each reader's native locator; conversions must be tested against the same EPUB fixtures. | Adapter v2; KOReader native route for KOReader locators; supported non-`/app` Book API for Readest persistence/status | Readest resumes by CFI and can receive KOReader position without requiring Grimmory Web Reader. |
-| Grimmory Web Reader position (**optional**) | If enabled, use Prose in the Adapter to produce a verified XPointer→CFI projection when it can load the exact EPUB spine document. A failure never blocks native sync. | Supported Book API, only after DTO and non-interference are verified | Best-effort projection; not a v2 release requirement. |
+| Readest progress (**required**) | Preserve Readest CFI/href and KOReader XPointer. The Adapter uses Prose's `cfiToXPointer()` and `xPointerToCfi()` against the exact matched EPUB spine DOM to create the other reader's locator. Keep the source locator even if conversion fails. | Adapter v2; KOReader native route for XPointer; supported non-`/app` Book API for CFI persistence/status | Readest and KOReader exchange EPUB positions through one server-side conversion path; Readest does not need to call Grimmory directly. |
+| Grimmory Web Reader position (**optional**) | Reuse the Adapter's Prose XPointer→CFI conversion for Book API projection when enabled. A failure never blocks native KOReader↔Readest sync. | Supported Book API, only after DTO and non-interference are verified | Best-effort Web Reader projection; not a v2 release requirement beyond the required cross-reader locator conversion. |
 | PDF/CBZ progress (**required**) | Preserve 1-indexed page and total pages when known; store ratio separately as `currentPage / totalPages`. Do not create EPUB CFI. Book API stores Readest page progress; its automatic KOReader side effect currently syncs percentage only. | Supported non-`/app` Book API for Readest persistence, plus Adapter native KOReader write when propagating a page to KOReader | Same page position across KOReader and Readest; optional Web Reader display is separate. |
 | Continue Reading / read status | Actual first locator/page can transition `UNREAD → READING` even when rounded display progress is 0%. Near-finished progress may mark `READ`; explicit status has timestamp precedence over stale sync events. | Grimmory progress and status APIs | Grimmory's Continue Reading uses the right status without inventing a percentage. |
 | Regular shelf listing and sync (**required**) | Return regular shelves and their paginated membership; reconcile additions/removals without treating a partial response as deletion. | Grimmory regular shelf APIs (`/api/v1/shelves` and supported shelf-book routes) | KOReader and Readest see the same regular shelf membership. |
@@ -105,9 +106,9 @@ The legacy `/api/grimmlink/v1/**` contract remains mounted for existing clients.
 | `GET /books/{id}/content?hash=…` | Resolve hash to a verified book/file; `GET /api/v1/books/{bookId}/download` | Public | Required hash must resolve to the requested ID before the Adapter streams content to the authenticated reader. |
 | `GET /shelves`, `GET /shelves/{id}/items` | `GET /api/v1/shelves`; `GET /api/v1/shelves/{shelfId}/books` | Public | Regular shelves only in v2. |
 | `PUT/DELETE /shelves/{id}/items/{bookId}` | `POST /api/v1/books/shelves` | Public | Assignment/unassignment changes shelf membership, never deletes a Grimmory book. |
-| `GET /progress/{hash}?reader=koreader` | `GET /api/koreader/syncs/progress/{bookHash}` | Public | Native XPointer/page state is preserved. |
-| `GET /progress/{hash}?reader=readest` | `GET /api/v1/books/{bookId}`; optional native `GET /api/koreader/syncs/progress/{bookHash}` | Public | Book DTO provides CFI/page data; native route supplements KOReader locator where available. |
-| `PUT /progress/{hash}` | `POST /api/v1/books/progress`; `POST /api/v1/books/status`; `PUT /api/koreader/syncs/progress` as needed | Public | Book API persists Readest locator/page and percentage; explicit status handles first real position at 0%; native route carries KOReader position. |
+| `GET /progress/{hash}?reader=koreader` | `GET /api/v1/books/{bookId}` and `GET /api/koreader/syncs/progress/{bookHash}`; Prose CFI→XPointer for a newer EPUB Book position | Public | The newest verified position is returned as KOReader XPointer/page. Conversion failure returns 424 rather than an older page. |
+| `GET /progress/{hash}?reader=readest` | `GET /api/v1/books/{bookId}` and, when KOSync credentials are linked, `GET /api/koreader/syncs/progress/{bookHash}`; Prose XPointer→CFI when native EPUB is newer | Public | The newest verified position is returned as CFI/page. A Book-only session cannot inspect native progress. |
+| `PUT /progress/{hash}` | Prose EPUB CFI↔XPointer; `POST /api/v1/books/progress`; `POST /api/v1/books/status`; `PUT /api/koreader/syncs/progress` as needed | Public | Book API persists CFI/page and percentage; native route carries XPointer/page when KOSync credentials are linked. `epubConversion` reports `synced`, `failed`, or `not-needed`. |
 | `GET/PUT /books/{id}/metadata` | `GET /api/v1/books/{bookId}`; `PUT /api/v1/books/{bookId}/metadata` | LAN | Shared book metadata is a management operation; keep this route LAN-only even though it requires Adapter authentication. Mutations use an operation ID. |
 | `POST /reading-sessions[/batch]` | `POST /api/v1/reading-sessions` | Public | Adapter deduplicates operations before forwarding. |
 | Metadata automation and OPF apply | `GET /api/v1/libraries`; `GET /api/v1/libraries/{id}`; `GET /api/v1/books/page`; `GET /api/v1/books/{id}`; `PUT /api/v1/books/{id}/metadata` | LAN | Background writes use the operator's encrypted Grimmory refresh credential. The browser can preview before explicit apply. |
@@ -207,18 +208,20 @@ Allowed projection states are `synced`, `skipped`, `failed`, and `unsupported`. 
 
 The v2 model stores each reader's native location and any verified conversions. KOReader XPointer remains the native value used for KOReader round trips. Readest CFI/href remains the native value used by Readest and the Grimmory EPUB reader. The Adapter must preserve the original string and avoid lossy normalization.
 
-For Readest, first reuse the fork's existing `utils/xcfi.ts` conversion at the point where Readest has the loaded EPUB document. Evaluate `@prose-reader/koreader` as a replacement/helper only after the same EPUB fixtures prove parity for existing positions.
+On an EPUB push, `source=koreader` requires an XPointer and `source=readest` requires a CFI. Even if the client supplies both, the Adapter recomputes the other locator from the source locator with Prose and discards an unverified counterpart. EPUB layout page numbers do not replace the CFI/XPointer or its reported fraction; PDF/CBZ/CBR/DJVU continue to use page positions.
 
-The required cross-reader path is KOReader ↔ Readest. The Adapter preserves the native KOReader XPointer; Readest uses its existing CFI↔XPointer helper when the EPUB document is open. Grimmory Web Reader projection is optional because it is not part of the user's required reading workflow. If enabled later, add a separate Adapter-owned step using the [Prose KOReader package](https://doc.prose-reader.com/koreader) to convert XPointer→CFI when the Adapter can load the matching EPUB spine-item `Document`. Prose is a conversion library, not a sync client or network integration; it requires verified book identity, read-only access to the EPUB, OPF/spine resolution, and a DOM matching the source location. Grimmory's built-in conversion can remain enabled, but it is not the sole reliable projection path because some accepted XPointer forms fail conversion upstream.
+The required cross-reader path is KOReader ↔ Readest, including positions written by Grimmory Web Reader to the Book API. Conversion belongs in the Adapter rather than in a reader-specific GrimmLink client. Use the [Prose KOReader package](https://doc.prose-reader.com/koreader) for both directions: `xPointerToCfi()` for KOReader→Readest/Book API and `cfiToXPointer()` for Readest/Web Reader→KOReader. The functions need the `Document` for the exact spine item named by the locator; never pass whichever chapter happens to be visible. The Adapter resolves the verified Grimmory book/file identity, downloads the exact EPUB through the authenticated Book API, verifies its KOReader digest against the requested hash, parses its container/OPF/spine, and provides the matching spine-item DOM to Prose.
 
-If Grimmory Web Reader projection is enabled, implement Prose conversion behind an Adapter converter worker (or equivalent), with bounded EPUB size/time, strict path validation, and fixture coverage. It is required before that optional capability is advertised; it is not a prerequisite for v2 or native KOReader ↔ Readest sync. On missing/ambiguous DOM, unsupported indexed pointer, or conversion failure:
+Prose is a conversion library, not a sync client or network integration. The Adapter uses one long-lived Node worker guarded by an async lock, a two-file/128 MiB disk cache, and a one-book/one-spine worker cache. EPUB files are capped at 64 MiB, spine XML at 4 MiB, and conversion/download operations have time limits. This avoids repeated EPUB fetches for nearby progress events on the Pi. A direct NAS file path can replace the Book API download later only after a reliable book-file-to-mounted-path mapping and path containment check exist; the Adapter does not recursively search the NAS by title.
 
-1. Keep the native XPointer/page push and pull working.
-2. Keep the last known-good CFI; never replace it with an unverified chapter-start or guessed location.
-3. Return `webReaderProjection.status = failed|skipped` with a safe reason; keep native sync marked successful if it succeeded.
+The Adapter reads Grimmory Web Reader's saved EPUB CFI from the Book API when a client asks for progress. When that Book position is newer than native KOReader progress, Prose converts it before returning a KOReader XPointer. Grimmory's own conversion may remain enabled, but is not treated as proof that both stored locators agree. The Adapter cannot initiate a background push at the moment a user reads in Web Reader: the change reaches KOReader/Readest on the next Adapter progress pull. A KOSync-linked Adapter session is needed to read/write the native KOReader route; a Grimmory-password-only session can use the Book API but cannot inspect native state.
+
+Prose conversion is EPUB-only. PDF/CBZ use page locations. Prose documents limitations around CSS-dependent DOM differences, older boxing-element pointers, and some entity-heavy text; include these cases in acceptance fixtures. On missing/ambiguous DOM, unsupported indexed pointer, or conversion failure:
+
+1. Persist or retain the source reader's original locator through its native path.
+2. Do not write an unverified destination locator; keep the last known-good counterpart and report the projection as `failed|skipped` with a safe reason.
+3. Keep independent progress writes successful when they succeeded, but do not report cross-reader synchronization as complete.
 4. Do not claim exact Web Reader synchronization until a real Grimmory Reader open/resume check passes.
-
-Prose conversion is EPUB-only. PDF/CBZ use page locations. Prose documentation also notes that CFI resolution may differ when book CSS affects the DOM and that some legacy pointers may parse without resolving; these cases belong in acceptance fixtures.
 
 ## 7. Continue Reading and status policy
 
@@ -275,10 +278,10 @@ The Adapter includes a small web UI for the existing OPF/sidecar ingestion workf
 
 | Area | Keep | Change for v2 |
 |---|---|---|
-| KOReader progress | Native XPointer, fraction, PDF page handling, verified-hash resolution, minimal identity response, and cross-device round trip. | New plugin calls v2. Adapter maps v2 to Grimmory native KOReader API; optional Web Reader projection is separately gated. |
+| KOReader progress | Native XPointer, fraction, PDF page handling, verified-hash resolution, minimal identity response, and cross-device round trip. | New plugin calls v2. Adapter maps v2 to Grimmory native KOReader API and consumes a newer Web Reader EPUB CFI through the Book API on the next pull. |
 | Continue Reading | First-real-position handling and manual-status timestamp guard. | Make the rule explicit across both clients and verify after upstream native status updates. |
 | Shelves | Regular shelf sync, safe unassignment, magic-shelf read-only behavior, and multi-shelf local ownership. | Move clients to one versioned v2 contract; gate magic shelf support on the actual Grimmory version/API capability. |
-| Readest | Existing fork's GrimmLink progress and shelf sync. | Update fork to v2, retain its reader-native CFI/href and existing conversion utility during parity work. |
+| Readest | Existing fork's GrimmLink progress and shelf sync. | Update fork to v2 and retain its reader-native CFI/href. The Adapter owns cross-reader CFI/XPointer conversion; the fork's existing helper may remain only during client parity work. |
 | Authentication | KOSync username/password field semantics (plain password entered, MD5 computed by client), Adapter-side Grimmory token handling, and secret redaction. | Preserve the KOSync credential form for Readest and the new KOReader plugin; link those credentials to the normal Grimmory API account server-side. |
 | Sessions/metadata | Idempotency, rating conversion, and current supported sync mappings. | Capability-gate each upstream feature and return explicit unsupported/error states. |
 | OPF/sidecar ingestion | Existing parser/normalizer workflow, metadata mapping, identity checks, sidecar fallback rules, and file safety invariants. | Keep as a first-class Adapter v2 capability, separate from reader progress endpoints; write metadata through the supported Official API and clearly report cover art as pending until the documented cover-upload route is implemented and verified. |
@@ -289,8 +292,9 @@ No data migration is required for the Adapter's derived caches if they remain re
 
 - KOReader device A → Adapter → Grimmory → KOReader device B receives the exact same native XPointer and fractional progress.
 - Readest fork sends CFI/href and resumes at the same location after a fresh app launch; its shelf sync still works.
-- Readest ↔ KOReader position conversion is checked on real EPUB fixtures, including nested elements and duplicate text.
-- KOReader XPointer is preserved exactly by the Adapter; Readest receives it and converts it to CFI through the fork's tested helper.
+- Readest ↔ KOReader position conversion is checked on real EPUB fixtures, including nested elements and duplicate text. The Adapter verifies the matching EPUB digest and uses the locator's exact spine item.
+- KOReader XPointer is preserved exactly as the source locator; the Adapter converts it to CFI for Readest and the Book API. A mismatched client-supplied CFI/XPointer pair is replaced with Prose's verified conversion.
+- Grimmory Web Reader EPUB CFI newer than native KOReader progress resumes at the same paragraph on KOReader's next Adapter pull; an older native XPointer is never returned after conversion failure.
 - PDF page position round-trips between KOReader and Readest without requiring EPUB CFI or Grimmory Web Reader projection.
 - First position at the start of an EPUB/PDF appears as `READING`/Continue Reading without percentage inflation.
 - Explicit `READ`, `UNREAD`, and resume transitions behave according to timestamp precedence.
@@ -298,7 +302,7 @@ No data migration is required for the Adapter's derived caches if they remain re
 - Regular shelf listing, add/remove, reconnect reconciliation, and multi-shelf file ownership all work without relying on `/api/v1/app/**`.
 - Magic shelf removal is rejected; a missing upstream magic-shelf API is shown as unsupported, not as an empty shelf, and does not block v2 readiness.
 - Retried progress, shelf, and session mutations do not duplicate effects.
-- No operation reports success when upstream rejected it, a projection was skipped, or a capability is unsupported.
+- Each response reports source write success separately from `epubConversion`, native sync, and Readest projection; a skipped or failed projection is never reported as synced.
 - Local UI scan and preview do not mutate Grimmory; explicit apply updates the selected book through Official APIs.
 - The UI rejects ambiguous book matches and paths outside configured roots, and reports metadata/cover partial failures accurately.
 - The Setup form creates a copyable DB environment snippet locally in the browser; it does not submit or persist the DB password.
@@ -308,9 +312,9 @@ No data migration is required for the Adapter's derived caches if they remain re
 ## 12. Open implementation gates
 
 1. Capture the target Grimmory build's OpenAPI schema and verify progress/status writes, shelf assignment, file download, sessions, notebook/rating routes, OPF metadata DTO, and the documented cover-upload route. Cover application remains pending until the Adapter implementation and deployed-build persistence are verified.
-2. Verify whether the configured KOReader sync + `syncWithWebReader` settings cause `POST /api/v1/books/progress` to update native KOReader state. The current helper converts EPUB CFI to XPointer but only copies percentage for PDF/CBZ; define and verify explicit native writes from Adapter for any missing locator/page propagation.
+2. Verify whether the configured KOReader sync + `syncWithWebReader` settings cause `POST /api/v1/books/progress` to update native KOReader state. The Adapter implements explicit native writes for a verified locator/page; confirm their behavior and timestamp order on the deployed build.
 3. Verify regular shelf list/items and add/remove against the target Grimmory build. Magic shelf API replacement is a v4 follow-up and is not a v2 gate.
-4. If Grimmory Web Reader projection is enabled, implement the Prose converter worker with a matching-EPUB DOM and tested spine resolution; native KOReader ↔ Readest sync remains independent of it.
+4. Build and verify the implemented bounded Prose converter in the Pi Docker image, then test real EPUBs including nested content, duplicate text, and a Web Reader CFI newer than native KOReader progress. The local synthetic two-spine round trip is only an offline gate.
 5. Verify status precedence against the exact current Grimmory build; native KOReader sync may apply automatic status before Adapter correction.
 6. Confirm whether v1 routes remain temporarily enabled for rollback; this is operational only, not a v2 client requirement.
 

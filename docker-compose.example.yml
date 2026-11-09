@@ -1,8 +1,7 @@
 services:
   grimmlink-adapter:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${GRIMMLINK_ADAPTER_IMAGE:-ghcr.io/0xstillb/grimmlink-adapter:latest}
+    pull_policy: always
     container_name: grimmlink-adapter
     restart: unless-stopped
     ports:

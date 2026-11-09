@@ -73,7 +73,7 @@ Default stack: Python 3.12 + FastAPI + httpx + SQLite + pydantic + pytest + Dock
 8. Magic Shelf removal = read-only/rule-derived
 9. multi-shelf ต้องไม่ลบ local file ผิด
 10. EPUB native location/CFI/XPointer เป็นตำแหน่งหลัก
-11. EPUB display % ต้องสัมพันธ์กับ page ratio เมื่อมี page data ที่เชื่อถือได้
+11. EPUB ใช้ CFI/XPointer และ fraction จาก reader ต้นทาง; page ratio ที่ขึ้นกับ layout ห้ามทับตำแหน่งหรือ fraction
 12. PDF page/progress/conflict semantics ต้องคงเดิม
 13. retry ต้อง idempotent
 14. OPF ingestion: Primary = Official Metadata API, Fallback = Sidecar JSON (Session 03A); source ebook files are never modified
@@ -98,9 +98,15 @@ The Adapter serves its Setup, Diagnostics, and OPF/sidecar review UI at `/api/gr
 
 Use **Setup** to generate the `GRIMMORY_DB_*` environment snippet for a dedicated SELECT-only MariaDB account. The browser copies the snippet locally; it does not submit or store the database password. Paste it into the Adapter's private `.env`, restart the Adapter, then use **Diagnostics → Run diagnostics** to verify the Grimmory API, Adapter SQLite, hash lookup query permissions, metadata roots, and mDNS. The downloaded JSON report contains no passwords or tokens. To produce the same system report from a terminal/container, run `uv run python -m grimmlink_adapter.diagnostics` from the Adapter project directory.
 
+EPUB progress uses the pinned Prose converter in the Adapter. A KOReader XPointer is converted to CFI for Grimmory's Book API and Readest; a newer CFI from Readest or Grimmory Web Reader is converted to XPointer on KOReader's next progress pull. The converter verifies the exact downloaded EPUB's KOReader digest before using its spine DOM. It keeps a small bounded cache for the Pi. Diagnostics reports whether Node and the converter package are installed. For a local check, run `npm ci` and `node worker.test.mjs` inside `prose_converter`; the Docker build installs these dependencies automatically. A `424` progress response means the newest EPUB locator could not be converted, so the Adapter refused to return an older page. A live Pi/reader check is still required before relying on cross-device resume.
+
 The service advertises `grimmlink.local` through mDNS when `MDNS_ENABLED=true`. In Docker bridge mode, set `LAN_BIND_IP` to the Pi's reserved/static LAN IPv4; the example binds ports 8085 and 6060 to that interface and advertises the same address through mDNS. Ensure multicast DNS packets can pass between the container and LAN (an mDNS reflector or host networking may be needed). Host networking has different Docker DNS behavior, so configure `GRIMMORY_BASE_URL` to an address reachable from that network mode. Docker Desktop may not pass multicast; use the host's LAN IP and port `8085` as the fallback. **Do not forward either published port from the Internet, and keep host firewall rules limited to LAN clients.** Direct connections to the Adapter port bypass reverse-proxy path ACLs. Use the reverse proxy as the public entry point for Reader routes and to enforce LAN-only access for `/api/grimmlink/v2/local/**`.
 
 The example Compose file bind-mounts the Pi4's existing NAS directory read-only at `/imports` in the Adapter and at `/books` in Grimmory. Set `NAS_BOOKS_ROOT` in Compose's `.env` to the actual host mount, for example `/mnt/nas/books`. The example is a reference: integrate the Adapter into the existing Grimmory/DB network rather than replacing a running server with it. mDNS advertises the configured Adapter port; it does not configure firewall rules or expose the port by itself.
+
+## Build and install the container on a Pi
+
+GitHub Actions publishes `ghcr.io/0xstillb/grimmlink-adapter` for `linux/arm64` and `linux/arm/v7` when a `v*` tag is pushed, and can also be started manually from the Actions tab. The publish job waits for lint, type checks, Python tests, and the Prose worker test. Set `GRIMMLINK_ADAPTER_IMAGE` in the Pi's Compose `.env` to the matching version tag, for example `ghcr.io/0xstillb/grimmlink-adapter:<version>`; the Compose service pulls that image instead of building on the Pi. Make the GHCR package public for anonymous pulls, or run `docker login ghcr.io` on the Pi with a token that has `read:packages` access. Deploy with `docker compose pull grimmlink-adapter` followed by `docker compose up -d --no-deps grimmlink-adapter`. The image tag is created only after the source is pushed and tagged; do not use `latest` for a controlled rollout.
 
 ## Auto / Manual metadata on the Pi4
 

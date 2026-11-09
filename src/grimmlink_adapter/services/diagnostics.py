@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from grimmlink_adapter import __version__
 from grimmlink_adapter.config import settings
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.identity_lookup import GrimmoryIdentityLookup
+from grimmlink_adapter.services.prose_converter import ProseConverter
 
 
 def _check(name: str, status: str, summary: str, action: str | None = None, **details: Any) -> dict[str, Any]:
@@ -37,6 +39,7 @@ async def collect_diagnostics(mdns_status: dict[str, Any] | None = None) -> dict
     checks.append(await _check_sqlite())
     checks.append(await _check_grimmory())
     checks.append(await GrimmoryIdentityLookup().diagnose())
+    checks.append(_check_prose_converter())
     checks.append(_check_metadata_roots())
     try:
         path = Path(settings.SQLITE_DB_PATH).expanduser().resolve()
@@ -153,6 +156,21 @@ def _check_metadata_roots() -> dict[str, Any]:
             roots=roots,
         )
     return _check("metadataRoots", "ok", "All configured metadata folders are readable.", roots=roots)
+
+
+def _check_prose_converter() -> dict[str, Any]:
+    worker = ProseConverter._worker_path()
+    installed = (
+        shutil.which("node") is not None
+        and worker.is_file()
+        and (worker.parent / "node_modules" / "@prose-reader" / "koreader").is_dir()
+    )
+    if installed:
+        return _check("proseEpubConversion", "ok", "Prose EPUB position converter is installed.")
+    return _check(
+        "proseEpubConversion", "fail", "Prose EPUB position converter is unavailable.",
+        "Install the pinned Node dependencies or rebuild the Adapter image with the Prose worker.",
+    )
 
 
 async def main() -> None:
