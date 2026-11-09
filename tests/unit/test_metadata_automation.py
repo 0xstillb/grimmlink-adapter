@@ -105,6 +105,21 @@ def test_library_subfolder_maps_only_its_own_books(tmp_path: Path, monkeypatch: 
         check_storage(policy)
 
 
+def test_pending_sources_stays_in_library_subfolder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
+    (tmp_path / ".nas").write_text("mounted")
+    selected = tmp_path / "Books" / "MANGA_NC"
+    unrelated = tmp_path / "@Recycle" / "Books" / "MANGA_NC"
+    for folder in (selected, unrelated):
+        folder.mkdir(parents=True)
+        (folder / "Novel.epub").write_bytes(b"book")
+        (folder / "Novel.opf").write_text("metadata")
+    policy = LibraryPolicy(mappings=[{
+        "libraryPathId": 4, "rootIndex": 0, "localSubpath": "Books/MANGA_NC", "marker": ".nas",
+    }])
+    assert pending_sources(set(), check_storage(policy), policy) == ["Novel.epub"]
+
+
 @pytest.mark.asyncio
 async def test_manual_scan_ignores_other_nas_folders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from grimmlink_adapter.api import v2
@@ -113,8 +128,8 @@ async def test_manual_scan_ignores_other_nas_folders(tmp_path: Path, monkeypatch
     unrelated = tmp_path / "@Recycle" / "Books" / "MANGA_NC"
     for folder in (selected, unrelated):
         folder.mkdir(parents=True)
-        (folder / "Novel.opf").write_text("metadata")
-        (folder / "Novel.epub").write_bytes(b"book")
+        (folder / "Novel [รักนี้ผีจัดให้].opf").write_text("metadata")
+        (folder / "Novel [รักนี้ผีจัดให้].pdf").write_bytes(b"book")
     monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
 
     async def scoped_folders(*_args):
@@ -122,8 +137,26 @@ async def test_manual_scan_ignores_other_nas_folders(tmp_path: Path, monkeypatch
 
     monkeypatch.setattr(v2, "_library_metadata_folders", scoped_folders)
     sources = await v2.list_metadata_sources(library_id=4, creds=None, session=None)
-    assert [source["sourcePath"] for source in sources] == ["Books/MANGA_NC/Novel.opf"]
-    assert sources[0]["bookCandidates"] == ["Books/MANGA_NC/Novel.epub"]
+    assert [source["sourcePath"] for source in sources] == ["Books/MANGA_NC/Novel [รักนี้ผีจัดให้].opf"]
+    assert sources[0]["bookCandidates"] == ["Books/MANGA_NC/Novel [รักนี้ผีจัดให้].pdf"]
+
+
+@pytest.mark.asyncio
+async def test_nas_folder_dropdown_browses_one_level_safely(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from fastapi import HTTPException
+
+    from grimmlink_adapter.api.automation import browse_nas_folders
+
+    (tmp_path / "Books" / "MANGA_NC").mkdir(parents=True)
+    (tmp_path / "@Recycle").mkdir()
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
+    root = await browse_nas_folders(root_index=0, parent=".", session=None)
+    assert root["folders"] == ["Books"]
+    books = await browse_nas_folders(root_index=0, parent="Books", session=None)
+    assert books["folders"] == ["Books/MANGA_NC"]
+    with pytest.raises(HTTPException) as error:
+        await browse_nas_folders(root_index=0, parent="../outside", session=None)
+    assert error.value.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -302,9 +335,9 @@ async def test_sources_wait_until_book_is_in_library(configured_book):
     worker, client, row, policy, library, book, root = configured_book
     roots = check_storage(policy)
     known: set[Path] = set()
-    assert pending_sources(known, roots) == ["Book.epub"]
+    assert pending_sources(known, roots, policy) == ["Book.epub"]
     remember_book_paths(known, [book], library, policy, roots)
-    assert pending_sources(known, roots) == []
+    assert pending_sources(known, roots, policy) == []
     wrong = copy.deepcopy(book)
     wrong["primaryFile"]["filePath"] = "/elsewhere/Book.epub"
     with pytest.raises(ValueError):

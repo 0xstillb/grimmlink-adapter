@@ -660,8 +660,8 @@
             </details>
             <div class="actions"><button class="primary" id="saveAutomation" type="submit">บันทึก Auto และการตั้งค่า</button></div>
           </form>
-          <div class="actions" style="margin-top:16px"><button class="primary" id="runAutomation">นำเข้า Metadata ที่มีอยู่</button></div>
-          <p class="helper" style="margin-top:10px">การนำเข้าครั้งแรกเติมเฉพาะช่องว่างใน Grimmory · ถ้าเพิ่งเพิ่มหนังสือ ให้ Grimmory สแกนเข้าคลังหนังสือก่อน</p>
+          <div class="actions" style="margin-top:16px"><button class="primary" id="runAutomation">นำเข้า Metadata ตอนนี้</button></div>
+          <p class="helper" style="margin-top:10px">กดแล้วเริ่มงานทันที ไม่ต้องรอรอบ Auto · เติมเฉพาะช่องว่างใน Grimmory · หนังสือต้องอยู่ใน Library แล้ว</p>
           <div id="automationActivity" style="margin-top:20px" aria-live="polite">
             <div id="automationRuns"></div>
             <div id="automationResults"></div>
@@ -917,6 +917,14 @@
   const apiAutomation = (path, options = {}) => request("/local/automation" + path, { headers: headers(), ...options });
   const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วลองใหม่", library_folder_not_configured: "ระบุโฟลเดอร์ย่อยของ Library ใน NAS root แล้วบันทึก", library_folder_unavailable: "ไม่พบโฟลเดอร์ย่อยของ Library บน NAS", library_path_not_mapped: "ยังไม่ได้จับคู่ตำแหน่งไฟล์นี้กับโฟลเดอร์ NAS เปิดการตั้งค่า NAS แล้วจับคู่ทุก path ของ Library จากนั้นบันทึก", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบไฟล์ metadata หลายแบบที่ข้อมูลไม่ตรงกัน เลือกว่าจะใช้ OPF หรือ sidecar ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
   const currentLibrary = () => autoData?.libraries.find(library => String(library.id) === $("automationLibrary").value);
+  const browseFolder = async (rootIndex, folder, parent) => {
+    const data = await apiAutomation(`/roots/${rootIndex}/folders?parent=${encodeURIComponent(parent)}`);
+    folder.replaceChildren(new Option(`ใช้โฟลเดอร์นี้: ${data.current === "." ? "NAS root" : data.current}`, data.current));
+    if (data.current !== ".") folder.append(new Option("↶ ย้อนขึ้นหนึ่งระดับ", "__up__"));
+    for (const child of data.folders) folder.append(new Option(`เปิด ${child.split("/").at(-1)} ▸`, child));
+    if (data.truncated) { const note = new Option("แสดง 1,000 โฟลเดอร์แรก", ""); note.disabled = true; folder.append(note); }
+    folder.value = data.current; folder.dataset.current = data.current; folder.disabled = false;
+  };
   const renderPolicy = () => {
     const library = currentLibrary(); if (!library) return;
     const policy = library.policy;
@@ -934,10 +942,14 @@
       const mapping = policy?.mappings.find(item => item.libraryPathId === path.id);
       root.value = mapping ? String(mapping.rootIndex) : "";
       const marker = node("input"); marker.id = `map-marker-${path.id}`; marker.value = mapping?.marker || ".grimmlink-storage"; marker.maxLength = 512;
-      const folder = node("input"); folder.id = `map-folder-${path.id}`; folder.value = mapping?.localSubpath || ""; folder.placeholder = "เช่น Books/MANGA_NC หรือ . หาก Library อยู่ที่ root"; folder.maxLength = 1024; folder.required = Boolean(mapping); root.onchange = () => { folder.required = root.value !== ""; };
+      const folder = node("select"); folder.id = `map-folder-${path.id}`; folder.append(new Option("เลือก NAS root ก่อน", "")); folder.disabled = true; folder.required = Boolean(mapping);
+      const loadFolder = parent => { folder.disabled = true; browseFolder(root.value, folder, parent).catch(error => say("automationMessage", error.message, "error")); };
+      root.onchange = () => { folder.required = root.value !== ""; if (root.value) loadFolder("."); else { folder.replaceChildren(new Option("เลือก NAS root ก่อน", "")); folder.disabled = true; } };
+      folder.onchange = () => { const value = folder.value; if (value === "__up__") { const parts = folder.dataset.current.split("/"); parts.pop(); loadFolder(parts.join("/") || "."); } else if (value !== folder.dataset.current) loadFolder(value); };
+      if (root.value) loadFolder(mapping?.localSubpath || ".");
       const rootLabel = node("label", `Grimmory: ${path.path}`); rootLabel.htmlFor = root.id;
       const markerLabel = node("label", "ไฟล์ marker บน NAS (เทียบจาก root)"); markerLabel.htmlFor = marker.id;
-      const folderLabel = node("label", "โฟลเดอร์ย่อยของ Library ใน NAS root"); folderLabel.htmlFor = folder.id;
+      const folderLabel = node("label", "โฟลเดอร์ของ Library บน NAS (เลือกเข้าไปจนถึงโฟลเดอร์หนังสือ)"); folderLabel.htmlFor = folder.id;
       rootField.append(rootLabel, root); folderField.append(folderLabel, folder); markerField.append(markerLabel, marker); row.append(rootField, folderField, markerField); $("automationMappings").append(row);
     }
     $("automationFields").replaceChildren();
@@ -978,15 +990,16 @@
       const mappings = Array.from($("automationMappings").querySelectorAll("select[data-path-id]")).filter(input => input.value !== "").map(input => ({ libraryPathId: Number(input.dataset.pathId), rootIndex: Number(input.value), localSubpath: $("map-folder-" + input.dataset.pathId).value.trim(), marker: $("map-marker-" + input.dataset.pathId).value.trim() }));
       const fields = Array.from($("automationFields").querySelectorAll("input:checked")).map(input => input.value);
       if (!mappings.length || !fields.length) throw new Error("เลือกโฟลเดอร์อย่างน้อยหนึ่ง path และฟิลด์อย่างน้อยหนึ่งรายการ");
+      if (mappings.some(mapping => !mapping.localSubpath)) throw new Error("เลือกโฟลเดอร์ของ Library ให้ครบก่อนบันทึก");
       await apiAutomation(`/libraries/${library.id}`, { method: "PUT", body: JSON.stringify({ autoEnabled: $("automationAuto").checked, intervalSeconds: Number($("automationInterval").value), settleSeconds: library.policy?.settleSeconds || 30, sourcePreference: $("automationPreference").value, mappings, fields }) });
       await loadAutomation(); say("automationMessage", "บันทึกแล้ว กดตรวจตอนนี้ได้ทั้งตอนเปิดและปิด Auto", "success");
     });
   };
-  $("runAutomation").onclick = () => automationAction("runAutomation", "กำลังเข้าคิว…", async () => {
+  $("runAutomation").onclick = () => automationAction("runAutomation", "กำลังสั่งงาน…", async () => {
     const library = currentLibrary();
     if (!library?.policy?.mappings?.every(mapping => mapping.localSubpath)) throw new Error("ตั้งค่าโฟลเดอร์ NAS ของ Library นี้ก่อน");
     const result = await apiAutomation("/runs", { method: "POST", body: JSON.stringify({ libraryIds: [library.id], mode: "backfill_missing" }) });
-    say("automationMessage", `เริ่มนำเข้า Metadata แล้ว · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์`, "success"); await refreshActivity();
+    say("automationMessage", "สั่งนำเข้าแล้ว ไม่ต้องรอรอบ Auto · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์", "success"); await refreshActivity();
   });
   const refreshActivity = async (summary = false) => {
     const library = currentLibrary(); if (!library?.policy || activityLoading || !sessionToken || isPreviewMode) return;

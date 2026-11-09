@@ -461,8 +461,8 @@ def _source_books(source: Path) -> list[Path]:
             if path.is_file() and path.suffix.lower() in _BOOK_SUFFIXES
         )
     return sorted(
-        path for path in source.parent.glob(f"{source.stem}.*")
-        if path.is_file() and path.suffix.lower() in _BOOK_SUFFIXES
+        path for path in source.parent.iterdir()
+        if path.is_file() and path.suffix.lower() in _BOOK_SUFFIXES and path.stem == source.stem
     )
 
 

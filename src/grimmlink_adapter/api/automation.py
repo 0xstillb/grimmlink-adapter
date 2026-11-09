@@ -2,10 +2,12 @@
 
 import asyncio
 import json
+import os
 import time
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.automation import (
@@ -22,6 +24,7 @@ from grimmlink_adapter.security.auth_extractor import (
 from grimmlink_adapter.services.metadata_automation import (
     MetadataBlocked,
     check_storage,
+    configured_root,
     metadata_automation,
     metadata_execution_lock,
     server_key,
@@ -30,6 +33,39 @@ from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSess
 from grimmlink_adapter.state.metadata_automation import MetadataAutomationStore as Store
 
 router = APIRouter(prefix="/local/automation", tags=["Metadata automation"], dependencies=[Depends(require_v2_credentials)])
+
+
+@router.get("/roots/{root_index}/folders")
+async def browse_nas_folders(
+    root_index: int, parent: str = Query(default=".", max_length=1024),
+    session: tuple[str, AdapterSession] = Depends(get_adapter_session),
+) -> dict[str, Any]:
+    del session
+    relative = Path(parent)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise HTTPException(400, "Folder must stay within the NAS root")
+    try:
+        root = configured_root(root_index)
+        folder = (root / relative).resolve(strict=True)
+        if not folder.is_relative_to(root) or not folder.is_dir():
+            raise HTTPException(400, "Folder must stay within the NAS root")
+        children: list[str] = []
+        truncated = False
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if entry.name.startswith(".") or entry.name in {"@Recycle", "@__thumb"}:
+                    continue
+                if entry.is_dir(follow_symlinks=False):
+                    children.append((folder / entry.name).relative_to(root).as_posix())
+                    if len(children) > 1000:
+                        children.pop()
+                        truncated = True
+                        break
+    except MetadataBlocked as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(422, "NAS folder is unavailable") from exc
+    return {"current": folder.relative_to(root).as_posix(), "folders": sorted(children, key=str.casefold), "truncated": truncated}
 
 
 async def operator(session: tuple[str, AdapterSession] = Depends(get_adapter_session)) -> int:

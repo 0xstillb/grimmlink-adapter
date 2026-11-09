@@ -212,10 +212,11 @@ def remember_book_paths(
                     known.add(path)
 
 
-def pending_sources(known: set[Path], roots: dict[int, Path]) -> list[str]:
+def pending_sources(known: set[Path], roots: dict[int, Path], policy: LibraryPolicy) -> list[str]:
     """Report adjacent sources whose book files have not entered the library yet."""
     pending: list[str] = []
-    for root in dict.fromkeys(roots.values()):
+    folders = {mapped_root(roots[mapping.rootIndex], mapping.localSubpath) for mapping in policy.mappings}
+    for root in folders:
         for directory, dirs, names in os.walk(root, followlinks=False):
             parent = Path(directory)
             dirs[:] = [name for name in dirs if not (parent / name).is_symlink()]
@@ -340,7 +341,7 @@ class MetadataAutomation:
             if policy.autoEnabled:
                 await Store.enqueue(server_key(), row["library_id"], row["owner_id"], "check", "auto")
                 await Store.execute("UPDATE metadata_libraries SET next_due=? WHERE server=? AND library_id=?", (now + policy.intervalSeconds, server_key(), row["library_id"]))
-        runs = await Store.query("SELECT * FROM metadata_runs WHERE server=? AND state='queued' AND available_at<=? ORDER BY updated_at LIMIT 1", (server_key(), now))
+        runs = await Store.query("SELECT * FROM metadata_runs WHERE server=? AND state='queued' AND available_at<=? ORDER BY CASE WHEN requested_by='manual' THEN 0 ELSE 1 END, updated_at LIMIT 1", (server_key(), now))
         if runs:
             await self.run(runs[0])
         return bool(runs)
@@ -401,7 +402,7 @@ class MetadataAutomation:
                         remember_book_paths(known, page, library, policy, roots)
                         await Store.add_book_page(run["id"], total, page)
                         total += len(page)
-                    result["waitingForLibrary"] = await asyncio.to_thread(pending_sources, known, roots)
+                    result["waitingForLibrary"] = await asyncio.to_thread(pending_sources, known, roots, policy)
                     del known
                     result.update(total=total, phase="processing", position=0)
                     await self.progress(run["id"], result)
@@ -431,6 +432,14 @@ class MetadataAutomation:
                     result["checked"] += 1
                     result["position"] += 1
                     result["counts"][state] = result["counts"].get(state, 0) + 1
+                    if run["requested_by"] == "auto" and self.wake.is_set() and result["position"] < result["total"]:
+                        manual = await Store.query(
+                            "SELECT id FROM metadata_runs WHERE server=? AND state='queued' AND requested_by='manual' AND available_at<=? LIMIT 1",
+                            (server_key(), time.time()),
+                        )
+                        if manual:
+                            await self.progress(run["id"], result, "queued")
+                            return
                 if result["position"] < result["total"]:
                     await self.progress(run["id"], result, "queued")
                     return  # Yield to other libraries after twenty books.
