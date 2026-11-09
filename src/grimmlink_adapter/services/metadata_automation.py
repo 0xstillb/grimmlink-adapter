@@ -80,10 +80,11 @@ def check_storage(policy: LibraryPolicy) -> dict[int, Path]:
 
 def _library_path_id(file: dict[str, Any], book: dict[str, Any], library: dict[str, Any]) -> int | None:
     library_path = book.get("libraryPath")
-    if isinstance(library_path, dict) and type(library_path.get("id")) is int:
-        return library_path["id"]
+    path_id = library_path.get("id") if isinstance(library_path, dict) else None
+    if isinstance(path_id, int) and not isinstance(path_id, bool):
+        return path_id
     explicit_id = book.get("libraryPathId")
-    if type(explicit_id) is int:
+    if isinstance(explicit_id, int) and not isinstance(explicit_id, bool):
         return explicit_id
 
     raw_file_path = file.get("filePath")
