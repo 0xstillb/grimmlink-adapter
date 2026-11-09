@@ -57,6 +57,6 @@ USER adapter
 EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/healthcheck')" || exit 1
+    CMD python -c "import os, urllib.request; host=os.getenv('ADAPTER_HOST', '0.0.0.0'); host='127.0.0.1' if host in ('0.0.0.0', '::') else host; urllib.request.urlopen('http://' + host + ':' + os.getenv('ADAPTER_PORT', '8085') + '/healthcheck')" || exit 1
 
 CMD ["python", "-m", "uvicorn", "grimmlink_adapter.main:app", "--host", "0.0.0.0", "--port", "8085"]
