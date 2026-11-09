@@ -668,7 +668,7 @@
           </div>
         </div>
       </div><div class="card-footer">Auto อัปเดตหนังสือใหม่ · เล่มเดิมก่อนเริ่มใช้งานให้นำเข้าย้อนหลัง · ปกแสดงสถานะแยกจาก Metadata</div></article>
-      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-file"/></svg></span><div><h2>เลือกไฟล์และหนังสือด้วยตนเอง</h2><p>ค้นหาไฟล์จากโฟลเดอร์ที่ตั้งไว้ใน Adapter</p></div></div><div class="card-body"><div class="actions" style="margin-bottom:20px"><button id="scan">สแกนหาไฟล์ Metadata</button><span id="sourceCount" class="helper">ยังไม่ได้สแกน</span></div><p id="metadataAuthHint" class="helper">กรุณา <a href="#loginPanel">เชื่อมต่อบัญชี</a> ก่อนสแกนไฟล์</p><div class="row"><div class="field"><label for="source">ไฟล์ต้นทาง · OPF / sidecar</label><select id="source"><option value="">สแกนเพื่อเลือกไฟล์</option></select></div><div class="field"><label for="book">ไฟล์หนังสือที่ต้องการอัปเดต</label><select id="book"><option value="">เลือกไฟล์ต้นทางก่อน</option></select></div></div><button class="primary" id="preview">ดูตัวอย่างการเปลี่ยนแปลง <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><p id="scanMessage" class="feedback" role="status"></p></div></article>
+      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-file"/></svg></span><div><h2>เลือกไฟล์และหนังสือด้วยตนเอง</h2><p>สแกนเฉพาะโฟลเดอร์ของ Library ที่เลือกด้านบน</p></div></div><div class="card-body"><div class="actions" style="margin-bottom:20px"><button id="scan">สแกนหาไฟล์ Metadata</button><span id="sourceCount" class="helper">ยังไม่ได้สแกน</span></div><p id="metadataAuthHint" class="helper">กรุณา <a href="#loginPanel">เชื่อมต่อบัญชี</a> ก่อนสแกนไฟล์</p><div class="row"><div class="field"><label for="source">ไฟล์ต้นทาง · OPF / sidecar</label><select id="source"><option value="">สแกนเพื่อเลือกไฟล์</option></select></div><div class="field"><label for="book">ไฟล์หนังสือที่ต้องการอัปเดต</label><select id="book"><option value="">เลือกไฟล์ต้นทางก่อน</option></select></div></div><button class="primary" id="preview">ดูตัวอย่างการเปลี่ยนแปลง <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><p id="scanMessage" class="feedback" role="status"></p></div></article>
       <article class="card" id="previewPanel"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-check"/></svg></span><div><h2>2. ตรวจสอบแล้วบันทึก</h2><p>เปรียบเทียบข้อมูลปัจจุบันกับข้อมูลใหม่จากไฟล์</p></div></div><div class="card-body"><div id="message" class="feedback" role="status"></div><div id="previewEmpty" class="empty"><span class="icon-box"><svg aria-hidden="true"><use href="#i-book"/></svg></span><strong>ข้อมูลที่ดี เริ่มจากการตรวจดูก่อน</strong><p>เลือกไฟล์แล้วกดดูตัวอย่าง การเปลี่ยนแปลงจะแสดงที่นี่</p></div><div id="diff" class="table-wrap"></div><div class="preview-footer"><p class="helper">เมื่อเปลี่ยนไฟล์ที่เลือก ต้องดูตัวอย่างใหม่ก่อนบันทึก</p><button class="primary" id="apply" disabled>บันทึกการเปลี่ยนแปลง</button></div></div></article></div>
     </section>
     <footer><span>GrimmLink · A quieter home for your library.</span><span>KOReader + Readest</span></footer>
@@ -704,14 +704,14 @@
     $("logout").disabled = busy.has("logout") || metadataBusy || busy.has("runDiagnostics");
     $("runDiagnostics").disabled = !online || busy.has("runDiagnostics") || busy.has("logout");
     $("downloadDiagnostics").disabled = !diagnosticReport || busy.has("runDiagnostics");
-    $("scan").disabled = !online || metadataBusy || busy.has("logout");
+    $("scan").disabled = !online || !currentLibrary()?.policy?.mappings?.every(mapping => mapping.localSubpath) || metadataBusy || busy.has("logout");
     $("source").disabled = !online || !sources.length || metadataBusy;
     $("book").disabled = !online || !selected()?.bookCandidates?.length || metadataBusy;
     $("preview").disabled = !online || !hasSelection() || metadataBusy || busy.has("logout");
     $("apply").disabled = !online || !reviewedPayload || currentPreview?.status !== "dry_run" || metadataBusy || busy.has("logout");
     $("diagnosticAuthHint").hidden = online; $("metadataAuthHint").hidden = online;
     for (const id of ["loadAutomation", "bindAutomation", "runAutomation", "saveAutomation"]) $(id).disabled = !online || busy.has(id);
-    const selectedLibraryReady = Boolean(currentLibrary()?.policy);
+    const selectedLibraryReady = Boolean(currentLibrary()?.policy?.mappings?.every(mapping => mapping.localSubpath));
     $("runAutomation").disabled = !online || !selectedLibraryReady || busy.has("runAutomation");
     $("automationPolicyForm").inert = !online;
   };
@@ -791,14 +791,17 @@
     syncControls();
   };
   const scan = async () => {
-    invalidatePreview(); say("scanMessage", "กำลังค้นหาไฟล์ในโฟลเดอร์ที่ตั้งไว้…");
+    const library = currentLibrary();
+    if (!library?.policy) { say("scanMessage", "เลือก Library และบันทึกโฟลเดอร์ NAS ก่อน", "error"); return; }
+    invalidatePreview(); say("scanMessage", `กำลังค้นหาไฟล์ใน Library ${library.name}…`);
     try {
-      const result = await request("/local/metadata/sources", { headers: headers() });
+      const result = await request(`/local/metadata/sources?library_id=${library.id}`, { headers: headers() });
+      if (currentLibrary()?.id !== library.id) return;
       sources = result; $("source").replaceChildren();
       sources.forEach((item, index) => $("source").append(new Option(`${item.rootName} · ${item.sourcePath} (${item.sourceType})`, String(index))));
       if (!sources.length) $("source").append(new Option("ไม่พบไฟล์ Metadata", ""));
       refreshBooks(); $("sourceCount").textContent = `พบ ${sources.length} ไฟล์`;
-      say("scanMessage", sources.length ? "เลือกไฟล์แล้วดูตัวอย่างได้เลย" : "ไม่พบ OPF หรือ sidecar ตรวจสอบ METADATA_IMPORT_ROOTS และการแชร์โฟลเดอร์ในหน้าตรวจสอบระบบ", sources.length ? "success" : "");
+      say("scanMessage", sources.length ? "เลือกไฟล์แล้วดูตัวอย่างได้เลย" : "ไม่พบ OPF หรือ sidecar ในโฟลเดอร์ของ Library นี้", sources.length ? "success" : "");
     } catch (error) { say("scanMessage", error.message, "error"); }
   };
   $("loginForm").onsubmit = event => {
@@ -881,7 +884,7 @@
     invalidatePreview(); const version = selectionVersion;
     try {
       const item = selected(); if (!hasSelection()) throw new Error("เลือกไฟล์ต้นทางและหนังสือก่อนดูตัวอย่าง");
-      const payload = { operationId: operationId(), rootIndex: item.rootIndex, sourcePath: item.sourcePath, bookPath: $("book").value };
+      const payload = { operationId: operationId(), libraryId: currentLibrary().id, rootIndex: item.rootIndex, sourcePath: item.sourcePath, bookPath: $("book").value };
       const result = await request("/local/metadata/preview", { method: "POST", headers: headers(), body: JSON.stringify(payload) });
       if (version !== selectionVersion) return;
       currentPreview = result; reviewedPayload = result.status === "dry_run" ? payload : null; renderDiff(result.preview);
@@ -912,27 +915,30 @@
   const stateLabels = { queued: "เข้าคิว / รอลองใหม่", running: "กำลังทำงาน", completed: "จบรอบตรวจ", cancelled: "หยุดแล้ว", blocked: "ต้องแก้การตั้งค่า", failed: "พบข้อผิดพลาด", no_source: "ไม่มี OPF/sidecar", waiting_stable: "รอไฟล์นิ่ง", needs_review: "รอตรวจข้อขัดแย้ง", backfill_required: "รอนำเข้าย้อนหลัง", updated: "อัปเดตแล้ว", partial: "อัปเดตบางส่วน", in_sync: "ข้อมูลตรงกัน", preview: "ตัวอย่าง", skipped: "ข้ามตามกติกา", retry_wait: "รอตรวจใหม่" };
   const node = (tag, text = "", className = "") => { const element = document.createElement(tag); element.textContent = text; element.className = className; return element; };
   const apiAutomation = (path, options = {}) => request("/local/automation" + path, { headers: headers(), ...options });
-  const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วลองใหม่", library_path_not_mapped: "ยังไม่ได้จับคู่ตำแหน่งไฟล์นี้กับโฟลเดอร์ NAS เปิดการตั้งค่า NAS แล้วจับคู่ทุก path ของ Library จากนั้นบันทึก", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบไฟล์ metadata หลายแบบที่ข้อมูลไม่ตรงกัน เลือกว่าจะใช้ OPF หรือ sidecar ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
+  const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วลองใหม่", library_folder_not_configured: "ระบุโฟลเดอร์ย่อยของ Library ใน NAS root แล้วบันทึก", library_folder_unavailable: "ไม่พบโฟลเดอร์ย่อยของ Library บน NAS", library_path_not_mapped: "ยังไม่ได้จับคู่ตำแหน่งไฟล์นี้กับโฟลเดอร์ NAS เปิดการตั้งค่า NAS แล้วจับคู่ทุก path ของ Library จากนั้นบันทึก", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบไฟล์ metadata หลายแบบที่ข้อมูลไม่ตรงกัน เลือกว่าจะใช้ OPF หรือ sidecar ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
   const currentLibrary = () => autoData?.libraries.find(library => String(library.id) === $("automationLibrary").value);
   const renderPolicy = () => {
     const library = currentLibrary(); if (!library) return;
     const policy = library.policy;
+    $("sourceCount").textContent = policy?.mappings?.some(mapping => !mapping.localSubpath) ? "ระบุโฟลเดอร์ย่อยของ Library ก่อน" : "ยังไม่ได้สแกน";
     $("automationAuto").checked = policy?.autoEnabled || false;
     $("automationInterval").value = policy?.intervalSeconds || 300;
     $("automationPreference").value = policy?.sourcePreference || "review";
     $("automationPolicyDetails").open = !policy;
     $("automationMappings").replaceChildren();
     for (const path of library.paths || []) {
-      const row = node("div", "", "row"), rootField = node("div", "", "field"), markerField = node("div", "", "field");
+      const row = node("div", "", "row"), rootField = node("div", "", "field"), markerField = node("div", "", "field"), folderField = node("div", "", "field");
       const root = node("select"); root.dataset.pathId = String(path.id); root.id = `map-root-${path.id}`;
       root.append(new Option("ยังไม่ผูกโฟลเดอร์", ""));
       for (const item of autoData.roots) root.append(new Option(item.path, String(item.index)));
       const mapping = policy?.mappings.find(item => item.libraryPathId === path.id);
       root.value = mapping ? String(mapping.rootIndex) : "";
       const marker = node("input"); marker.id = `map-marker-${path.id}`; marker.value = mapping?.marker || ".grimmlink-storage"; marker.maxLength = 512;
+      const folder = node("input"); folder.id = `map-folder-${path.id}`; folder.value = mapping?.localSubpath || ""; folder.placeholder = "เช่น Books/MANGA_NC หรือ . หาก Library อยู่ที่ root"; folder.maxLength = 1024; folder.required = Boolean(mapping); root.onchange = () => { folder.required = root.value !== ""; };
       const rootLabel = node("label", `Grimmory: ${path.path}`); rootLabel.htmlFor = root.id;
       const markerLabel = node("label", "ไฟล์ marker บน NAS (เทียบจาก root)"); markerLabel.htmlFor = marker.id;
-      rootField.append(rootLabel, root); markerField.append(markerLabel, marker); row.append(rootField, markerField); $("automationMappings").append(row);
+      const folderLabel = node("label", "โฟลเดอร์ย่อยของ Library ใน NAS root"); folderLabel.htmlFor = folder.id;
+      rootField.append(rootLabel, root); folderField.append(folderLabel, folder); markerField.append(markerLabel, marker); row.append(rootField, folderField, markerField); $("automationMappings").append(row);
     }
     $("automationFields").replaceChildren();
     for (const field of metadataFields) {
@@ -951,7 +957,7 @@
     $("automationAccount").textContent = !data.workerEnabled ? "Worker ปิดอยู่" : data.accountBlocked ? "บัญชีต้องเชื่อมต่อใหม่" : data.accountConnected ? "เชื่อมบัญชีงานเบื้องหลังแล้ว" : "ยังไม่ได้เชื่อมบัญชีงานเบื้องหลัง";
     $("automationLibrary").replaceChildren();
     for (const library of data.libraries) {
-      const state = !library.policy ? "ต้องตั้งค่าโฟลเดอร์" : library.policy.autoEnabled ? "Auto เปิด" : "Auto ปิด";
+      const state = !library.policy || library.policy.mappings.some(mapping => !mapping.localSubpath) ? "ต้องตั้งค่าโฟลเดอร์" : library.policy.autoEnabled ? "Auto เปิด" : "Auto ปิด";
       $("automationLibrary").append(new Option(`${library.name} · ${state}`, String(library.id)));
     }
     if (data.libraries.some(library => String(library.id) === previous)) $("automationLibrary").value = previous;
@@ -965,11 +971,11 @@
   $("bindAutomation").onclick = () => automationAction("bindAutomation", "กำลังเชื่อม…", async () => {
     await apiAutomation("/account", { method: "PUT" }); await loadAutomation(); say("automationMessage", "ผูกบัญชีงานเบื้องหลังแล้ว เลือก Library เพื่อตั้งค่าได้", "success");
   });
-  $("automationLibrary").onchange = () => { renderPolicy(); refreshActivity().catch(error => say("automationMessage", error.message, "error")); };
+  $("automationLibrary").onchange = () => { sources = []; $("source").replaceChildren(new Option("สแกนเพื่อเลือกไฟล์", "")); $("book").replaceChildren(new Option("เลือกไฟล์ต้นทางก่อน", "")); $("sourceCount").textContent = "ยังไม่ได้สแกน"; invalidatePreview(); renderPolicy(); syncControls(); refreshActivity().catch(error => say("automationMessage", error.message, "error")); };
   $("automationPolicyForm").onsubmit = event => {
     event.preventDefault(); automationAction("saveAutomation", "กำลังบันทึก…", async () => {
       const library = currentLibrary(); if (!library) return;
-      const mappings = Array.from($("automationMappings").querySelectorAll("select[data-path-id]")).filter(input => input.value !== "").map(input => ({ libraryPathId: Number(input.dataset.pathId), rootIndex: Number(input.value), marker: $("map-marker-" + input.dataset.pathId).value.trim() }));
+      const mappings = Array.from($("automationMappings").querySelectorAll("select[data-path-id]")).filter(input => input.value !== "").map(input => ({ libraryPathId: Number(input.dataset.pathId), rootIndex: Number(input.value), localSubpath: $("map-folder-" + input.dataset.pathId).value.trim(), marker: $("map-marker-" + input.dataset.pathId).value.trim() }));
       const fields = Array.from($("automationFields").querySelectorAll("input:checked")).map(input => input.value);
       if (!mappings.length || !fields.length) throw new Error("เลือกโฟลเดอร์อย่างน้อยหนึ่ง path และฟิลด์อย่างน้อยหนึ่งรายการ");
       await apiAutomation(`/libraries/${library.id}`, { method: "PUT", body: JSON.stringify({ autoEnabled: $("automationAuto").checked, intervalSeconds: Number($("automationInterval").value), settleSeconds: library.policy?.settleSeconds || 30, sourcePreference: $("automationPreference").value, mappings, fields }) });
@@ -978,7 +984,7 @@
   };
   $("runAutomation").onclick = () => automationAction("runAutomation", "กำลังเข้าคิว…", async () => {
     const library = currentLibrary();
-    if (!library?.policy) throw new Error("ตั้งค่าโฟลเดอร์ NAS ของ Library นี้ก่อน");
+    if (!library?.policy?.mappings?.every(mapping => mapping.localSubpath)) throw new Error("ตั้งค่าโฟลเดอร์ NAS ของ Library นี้ก่อน");
     const result = await apiAutomation("/runs", { method: "POST", body: JSON.stringify({ libraryIds: [library.id], mode: "backfill_missing" }) });
     say("automationMessage", `เริ่มนำเข้า Metadata แล้ว · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์`, "success"); await refreshActivity();
   });

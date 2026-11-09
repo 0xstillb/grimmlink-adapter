@@ -35,6 +35,7 @@ class V2LocalMetadataRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operationId: UUID
+    libraryId: int = Field(gt=0)
     rootIndex: int = Field(ge=0)
     sourcePath: str = Field(min_length=1, max_length=1024)
     bookPath: str = Field(min_length=1, max_length=1024)

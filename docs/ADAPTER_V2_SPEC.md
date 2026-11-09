@@ -149,7 +149,7 @@ The current Grimmory 3.5.0 API reference documents [progress](https://grimmory.o
 | `GET/POST /syncs/metadata` and `POST /syncs/metadata/batch` | Synchronize supported personal ratings, bookmarks, and annotations through the existing deduplicated metadata service. |
 | `GET /local/metadata` | Serve the Adapter's local metadata management UI. |
 | `GET /local/diagnostics` | Run authenticated, read-only Adapter/Grimmory/SQLite/identity-DB/mDNS/import-root checks and return a redacted report. |
-| `GET /local/metadata/sources` | List supported `.opf` and sidecar files under configured import roots. |
+| `GET /local/metadata/sources?library_id={id}` | List supported `.opf` and sidecar files only under the selected Library's mapped NAS subfolders. |
 | `POST /local/metadata/preview` | Parse a selected source, resolve candidate Grimmory identity, and return a field diff without writing changes. |
 | `POST /local/metadata/apply` | Apply a reviewed preview through Grimmory's supported APIs. Successful repeats are suppressed by the recorded source fingerprint; the request `operationId` is correlation only. |
 

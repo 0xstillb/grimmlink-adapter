@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from grimmlink_adapter.api.books import download_book, get_book_by_hash
 from grimmlink_adapter.config import settings
+from grimmlink_adapter.models.automation import LibraryPolicy
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkBookSummary,
     GrimmlinkShelfSummary,
@@ -32,7 +33,13 @@ from grimmlink_adapter.security.auth_extractor import (
 )
 from grimmlink_adapter.services.auth_service import AuthService
 from grimmlink_adapter.services.diagnostics import collect_diagnostics
-from grimmlink_adapter.services.metadata_automation import metadata_execution_lock
+from grimmlink_adapter.services.metadata_automation import (
+    MetadataBlocked,
+    check_storage,
+    mapped_root,
+    metadata_execution_lock,
+    server_key,
+)
 from grimmlink_adapter.services.opf_ingestion import (
     OPFAuthorizationError,
     OPFFieldLockError,
@@ -47,6 +54,7 @@ from grimmlink_adapter.services.prose_converter import prose_converter
 from grimmlink_adapter.services.request_auth import get_official_bearer
 from grimmlink_adapter.services.shelf_service import ShelfService
 from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSessionStore
+from grimmlink_adapter.state.metadata_automation import MetadataAutomationStore
 
 router = APIRouter(tags=["GrimmLink v2"])
 _progress_service = ProgressService()
@@ -479,31 +487,59 @@ async def local_diagnostics(
     return await collect_diagnostics(mdns_status)
 
 
+async def _library_metadata_folders(
+    library_id: int, creds: ClientCredentials, session: tuple[str, AdapterSession],
+) -> dict[int, set[Path]]:
+    async with OfficialGrimmoryClient() as client:
+        library = await client.get_library(library_id, creds.bearer_token or "")
+    rows = await MetadataAutomationStore.query(
+        "SELECT config FROM metadata_libraries WHERE server=? AND library_id=? AND owner_id=?",
+        (server_key(), library_id, session[1].user_id),
+    )
+    if not rows:
+        raise HTTPException(422, "Configure the selected Library's NAS folders before scanning")
+    policy = LibraryPolicy.model_validate(json.loads(rows[0]["config"]))
+    path_ids = {path["id"] for path in library.get("paths", [])}
+    if any(mapping.libraryPathId not in path_ids for mapping in policy.mappings):
+        raise HTTPException(422, "Library paths changed; update the NAS folder mapping")
+    try:
+        roots = check_storage(policy)
+    except (OSError, MetadataBlocked) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    folders: dict[int, set[Path]] = {}
+    for mapping in policy.mappings:
+        folders.setdefault(mapping.rootIndex, set()).add(mapped_root(roots[mapping.rootIndex], mapping.localSubpath))
+    return folders
+
+
 @router.get("/local/metadata/sources")
 async def list_metadata_sources(
+    library_id: int = Query(gt=0),
     creds: ClientCredentials = Depends(require_v2_credentials),
+    session: tuple[str, AdapterSession] = Depends(get_adapter_session),
 ) -> list[dict[str, Any]]:
-    del creds  # Dependency authenticates the request; the scan is confined to configured roots.
+    folders = await _library_metadata_folders(library_id, creds, session)
     result: list[dict[str, Any]] = []
-    for root_index in range(len(settings.METADATA_IMPORT_ROOTS)):
+    for root_index, scoped_folders in folders.items():
         try:
             root = _configured_root(root_index)
-            for source in root.rglob("*"):
-                if not source.is_file() or source.is_symlink():
-                    continue
-                resolved = source.resolve(strict=True)
-                if not resolved.is_relative_to(root) or not resolved.name.lower().endswith(_METADATA_SUFFIXES):
-                    continue
-                if resolved.stat().st_size > settings.LOCAL_METADATA_MAX_SOURCE_BYTES:
-                    continue
-                books = [book for book in _source_books(resolved) if book.resolve(strict=True).is_relative_to(root)]
-                result.append({
-                    "rootIndex": root_index,
-                    "rootName": root.name,
-                    "sourcePath": resolved.relative_to(root).as_posix(),
-                    "sourceType": "sidecar" if resolved.name.lower().endswith(".metadata.json") else "opf",
-                    "bookCandidates": [book.relative_to(root).as_posix() for book in books],
-                })
+            for folder in scoped_folders:
+                for source in folder.rglob("*"):
+                    if not source.is_file() or source.is_symlink():
+                        continue
+                    resolved = source.resolve(strict=True)
+                    if not resolved.is_relative_to(folder) or not resolved.name.lower().endswith(_METADATA_SUFFIXES):
+                        continue
+                    if resolved.stat().st_size > settings.LOCAL_METADATA_MAX_SOURCE_BYTES:
+                        continue
+                    books = [book for book in _source_books(resolved) if book.resolve(strict=True).is_relative_to(folder)]
+                    result.append({
+                        "rootIndex": root_index,
+                        "rootName": folder.name,
+                        "sourcePath": resolved.relative_to(root).as_posix(),
+                        "sourceType": "sidecar" if resolved.name.lower().endswith(".metadata.json") else "opf",
+                        "bookCandidates": [book.relative_to(root).as_posix() for book in books],
+                    })
         except OSError:
             continue
     return result
@@ -526,12 +562,16 @@ def _ingestion_result_json(result: Any, root: Path) -> dict[str, Any]:
 async def _run_local_metadata(
     request: V2LocalMetadataRequest,
     creds: ClientCredentials,
+    session: tuple[str, AdapterSession],
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
+    folders = await _library_metadata_folders(request.libraryId, creds, session)
     root = _configured_root(request.rootIndex)
     source = _safe_rooted_file(root, request.sourcePath)
     book = _safe_rooted_file(root, request.bookPath)
+    if not any(source.is_relative_to(folder) and book.is_relative_to(folder) for folder in folders.get(request.rootIndex, set())):
+        raise HTTPException(status_code=400, detail="Selected files are outside this Library's NAS folders")
     if not source.name.lower().endswith(_METADATA_SUFFIXES):
         raise HTTPException(status_code=400, detail="Selected metadata file must be OPF or metadata JSON.")
     if book.suffix.lower() not in _BOOK_SUFFIXES:
@@ -571,13 +611,15 @@ async def _run_local_metadata(
 async def preview_local_metadata(
     request: V2LocalMetadataRequest,
     creds: ClientCredentials = Depends(require_v2_credentials),
+    session: tuple[str, AdapterSession] = Depends(get_adapter_session),
 ) -> dict[str, Any]:
-    return await _run_local_metadata(request, creds, dry_run=True)
+    return await _run_local_metadata(request, creds, session, dry_run=True)
 
 
 @router.post("/local/metadata/apply")
 async def apply_local_metadata(
     request: V2LocalMetadataRequest,
     creds: ClientCredentials = Depends(require_v2_credentials),
+    session: tuple[str, AdapterSession] = Depends(get_adapter_session),
 ) -> dict[str, Any]:
-    return await _run_local_metadata(request, creds, dry_run=False)
+    return await _run_local_metadata(request, creds, session, dry_run=False)

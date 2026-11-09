@@ -15,8 +15,19 @@ class LibraryMapping(BaseModel):
     libraryPathId: int = Field(gt=0)
     rootIndex: int = Field(ge=0)
     rootPath: str | None = None  # Filled by the server to detect reordered roots.
+    localSubpath: str | None = Field(default=None, max_length=1024)
     # A small file already present on the NAS; never created by the Adapter.
     marker: str = Field(min_length=1, max_length=512)
+
+    @field_validator("localSubpath")
+    @classmethod
+    def valid_subpath(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parts = value.replace("\\", "/").split("/")
+        if not value.strip() or value.startswith(("/", "\\")) or ":" in parts[0] or ".." in parts:
+            raise ValueError("Choose a folder within the configured NAS root; use . for the root itself")
+        return value.replace("\\", "/")
 
 
 class LibraryPolicy(BaseModel):

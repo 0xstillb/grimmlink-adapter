@@ -87,7 +87,7 @@ async def save_policy(library_id: int, policy: LibraryPolicy, owner_id: int = De
     try:
         await asyncio.to_thread(check_storage, policy)
     except (OSError, MetadataBlocked) as exc:
-        raise HTTPException(422, "storage_unavailable: check the configured root and NAS marker file") from exc
+        raise HTTPException(422, str(exc) if isinstance(exc, MetadataBlocked) else "storage_unavailable") from exc
     if policy.autoEnabled:
         if not settings.METADATA_WORKER_ENABLED or not settings.GRIMMORY_DB_ENABLED:
             raise HTTPException(422, "Enable the metadata worker and read-only identity database lookup first")

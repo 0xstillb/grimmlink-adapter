@@ -22,6 +22,7 @@ from grimmlink_adapter.services.metadata_automation import (
     MetadataBlocked,
     check_storage,
     inspect_sources,
+    mapped_book,
     pending_sources,
     remember_book_paths,
     server_key,
@@ -73,7 +74,7 @@ def test_generated_sidecars_do_not_feed_the_input_loop(tmp_path: Path):
 
 def test_nas_marker_and_path_escape_are_required(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
-    policy = LibraryPolicy(mappings=[{"libraryPathId": 11, "rootIndex": 0, "marker": ".nas"}])
+    policy = LibraryPolicy(mappings=[{"libraryPathId": 11, "rootIndex": 0, "localSubpath": ".", "marker": ".nas"}])
     with pytest.raises(OSError):
         check_storage(policy)
     (tmp_path / ".nas").write_text("NAS mounted")
@@ -81,6 +82,48 @@ def test_nas_marker_and_path_escape_are_required(tmp_path: Path, monkeypatch: py
     policy.mappings[0].marker = "../outside"
     with pytest.raises(MetadataBlocked):
         check_storage(policy)
+
+
+def test_library_subfolder_maps_only_its_own_books(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
+    (tmp_path / ".nas").write_text("mounted")
+    folder = tmp_path / "Books" / "MANGA_NC"
+    folder.mkdir(parents=True)
+    policy = LibraryPolicy(mappings=[{
+        "libraryPathId": 4, "rootIndex": 0, "localSubpath": "Books/MANGA_NC", "marker": ".nas",
+    }])
+    roots = check_storage(policy)
+    root, target = mapped_book(
+        {"filePath": "/books/Books/MANGA_NC/Novel.epub"},
+        {"libraryPathId": 4},
+        {"paths": [{"id": 4, "path": "/books/Books/MANGA_NC"}]},
+        policy, roots,
+    )
+    assert root == folder and target == folder / "Novel.epub"
+    policy.mappings[0].localSubpath = None
+    with pytest.raises(MetadataBlocked, match="library_folder_not_configured"):
+        check_storage(policy)
+
+
+@pytest.mark.asyncio
+async def test_manual_scan_ignores_other_nas_folders(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from grimmlink_adapter.api import v2
+
+    selected = tmp_path / "Books" / "MANGA_NC"
+    unrelated = tmp_path / "@Recycle" / "Books" / "MANGA_NC"
+    for folder in (selected, unrelated):
+        folder.mkdir(parents=True)
+        (folder / "Novel.opf").write_text("metadata")
+        (folder / "Novel.epub").write_bytes(b"book")
+    monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(tmp_path)])
+
+    async def scoped_folders(*_args):
+        return {0: {selected}}
+
+    monkeypatch.setattr(v2, "_library_metadata_folders", scoped_folders)
+    sources = await v2.list_metadata_sources(library_id=4, creds=None, session=None)
+    assert [source["sourcePath"] for source in sources] == ["Books/MANGA_NC/Novel.opf"]
+    assert sources[0]["bookCandidates"] == ["Books/MANGA_NC/Novel.epub"]
 
 
 @pytest.mark.asyncio
@@ -167,7 +210,7 @@ async def configured_book(metadata_db, monkeypatch: pytest.MonkeyPatch):
     (root / "Book.epub").write_bytes(b"original ebook bytes")
     (root / "Book.opf").write_text('<package><metadata><title>Source title</title><language>th</language></metadata></package>')
     monkeypatch.setattr(settings, "METADATA_IMPORT_ROOTS", [str(root)])
-    policy = LibraryPolicy(mappings=[{"libraryPathId": 11, "rootIndex": 0, "marker": ".nas"}])
+    policy = LibraryPolicy(mappings=[{"libraryPathId": 11, "rootIndex": 0, "localSubpath": ".", "marker": ".nas"}])
     book = {"id": 12, "libraryId": 9, "libraryPath": {"id": 11}, "title": "Old title", "addedOn": "2099-01-01T00:00:00Z", "primaryFile": {"id": 13, "filePath": "/books/Book.epub", "fileName": "Book.epub"}, "metadata": {"title": "Old title", "language": "en", "allMetadataLocked": False}}
     library = {"id": 9, "paths": [{"id": 11, "path": "/books"}]}
     await Store.execute("INSERT INTO metadata_libraries(server,library_id,owner_id,name,config,enrolled_at) VALUES(?,?,?,?,?,?)", (server_key(), 9, 1, "Library", policy.model_dump_json(), time.time()))

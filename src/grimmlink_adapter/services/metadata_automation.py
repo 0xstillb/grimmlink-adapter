@@ -74,8 +74,24 @@ def check_storage(policy: LibraryPolicy) -> dict[int, Path]:
         # Read one byte: existence of a stale mount point is not enough.
         with candidate.open("rb") as stream:
             stream.read(1)
+        mapped_root(root, mapping.localSubpath)
         roots[mapping.rootIndex] = root
     return roots
+
+
+def mapped_root(root: Path, subpath: str | None) -> Path:
+    if subpath is None:
+        raise MetadataBlocked("library_folder_not_configured")
+    relative = Path(subpath)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise MetadataBlocked("invalid_library_folder")
+    try:
+        folder = (root / relative).resolve(strict=True)
+    except OSError as exc:
+        raise MetadataBlocked("library_folder_unavailable") from exc
+    if not folder.is_relative_to(root) or not folder.is_dir():
+        raise MetadataBlocked("invalid_library_folder")
+    return folder
 
 
 def _library_path_id(file: dict[str, Any], book: dict[str, Any], library: dict[str, Any]) -> int | None:
@@ -125,7 +141,7 @@ def mapped_book(file: dict[str, Any], book: dict[str, Any], library: dict[str, A
     relative = upstream_file.relative_to(upstream_root)
     if ".." in relative.parts or not relative.parts:
         raise MetadataBlocked("file_path_escape")
-    root = roots[mappings[0].rootIndex]
+    root = mapped_root(roots[mappings[0].rootIndex], mappings[0].localSubpath)
     return root, root.joinpath(*relative.parts)
 
 
