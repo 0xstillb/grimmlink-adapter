@@ -644,22 +644,24 @@
     <section id="metadata" class="page" aria-labelledby="metadataTitle" hidden>
       <p class="eyebrow">MAKE YOUR LIBRARY FEEL RIGHT</p><h1 id="metadataTitle" tabindex="-1">อัปเดตข้อมูลหนังสือ</h1><p class="subtitle">นำข้อมูลจาก OPF หรือ sidecar เข้า Grimmory โดยตรวจดูการเปลี่ยนแปลงก่อนบันทึก</p>
       <div class="stack">
-      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-setup"/></svg></span><div><h2>จัดการ Metadata ตาม Library</h2><p>เปิด Auto และกดตรวจตอนนี้ได้ตลอด งานทำต่อแม้ปิดหน้าเว็บ</p></div></div><div class="card-body">
+      <article class="card"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-setup"/></svg></span><div><h2>จัดการ Metadata ตาม Library</h2><p>ตั้ง Auto สำหรับเล่มใหม่ หรือนำเข้า Metadata สำหรับเล่มที่มีอยู่</p></div></div><div class="card-body">
         <div class="actions"><button id="loadAutomation">โหลด Library</button><button id="bindAutomation">เชื่อมบัญชีงานเบื้องหลัง</button><span class="helper" id="automationAccount">เข้าสู่ระบบก่อนตั้งค่า</span></div>
         <p id="automationMessage" class="feedback" role="status"></p>
-        <div id="automationLibraries" style="margin-top:18px"></div>
         <div id="automationTools" hidden>
-          <div class="row" style="margin-top:20px"><div class="field"><label for="automationMode">คำสั่งสำหรับ Library ที่เลือก</label><select id="automationMode"><option value="check">ตรวจและอัปเดตตอนนี้ ตามกติกาที่ตั้งไว้</option><option value="preview">ดูตัวอย่างอย่างเดียว ไม่อัปเดต</option><option value="backfill_missing">นำเข้าเล่มที่มีอยู่ — เติมช่องว่าง</option><option value="backfill_source">นำเข้าเล่มที่มีอยู่ — ใช้ source ในฟิลด์ที่เลือก</option><option value="retry">ตรวจและลองงานที่ค้างใหม่</option></select></div><div class="field"><label for="automationLibrary">ตั้งค่า / ดูงานของ Library</label><select id="automationLibrary"></select></div></div>
-          <div class="actions"><button class="primary" id="runAutomation">ตรวจและอัปเดตตอนนี้</button><button id="refreshActivity">ดูผลล่าสุด</button></div>
-          <p class="helper" style="margin-top:10px">หากเพิ่งคัดลอกหนังสือ ให้ Grimmory สแกนเข้า Library ก่อน ระบบจะรอเมื่อยังไม่พบรายการ</p>
-          <details style="margin-top:20px"><summary>ตั้งค่า Auto และโฟลเดอร์ NAS ของ Library นี้</summary><form id="automationPolicyForm">
-            <label style="display:flex;align-items:center;gap:10px"><input id="automationAuto" type="checkbox" style="width:18px;min-height:18px">เปิด Auto ตามเวลา · ยังสั่ง Manual ได้เสมอ</label>
-            <div class="row"><div class="field"><label for="automationInterval">รอบตรวจ (วินาที)</label><input id="automationInterval" type="number" min="60" max="86400" value="300" required></div><div class="field"><label for="automationPreference">เมื่อมีหลาย source</label><select id="automationPreference"><option value="review">รอตรวจหากข้อมูลต่างกัน</option><option value="opf">ใช้ OPF ก่อน</option><option value="json">ใช้ JSON sidecar ก่อน</option></select></div></div>
-            <p class="helper">เลือก root ที่ Adapter/container มองเห็นให้ตรงกับแต่ละ path ของ Grimmory และระบุไฟล์ marker ที่มีอยู่บน NAS เช่น .grimmlink-storage เพื่อหยุดงานเมื่อ mount หลุด</p>
-            <div id="automationMappings"></div>
-            <fieldset style="margin:16px 0;border:1px solid var(--hairline,#dce3da);border-radius:8px"><legend>ฟิลด์ที่อนุญาตให้อัปเดต</legend><div id="automationFields" style="display:flex;gap:12px;flex-wrap:wrap"></div></fieldset>
-            <button class="primary" id="saveAutomation" type="submit">บันทึกการตั้งค่า Library</button>
-          </form></details>
+          <div class="field" style="margin-top:20px"><label for="automationLibrary">Library ที่ต้องการจัดการ</label><select id="automationLibrary"></select></div>
+          <form id="automationPolicyForm">
+            <label style="display:flex;align-items:center;gap:10px"><input id="automationAuto" type="checkbox" style="width:18px;min-height:18px">เปิด Auto สำหรับ Library นี้</label>
+            <div class="field"><label for="automationInterval">ตรวจหา Metadata ใหม่ทุก (วินาที)</label><input id="automationInterval" type="number" min="60" max="86400" value="300" required></div>
+            <details id="automationPolicyDetails" style="margin:16px 0"><summary>ตั้งค่าโฟลเดอร์ NAS และฟิลด์ Metadata</summary>
+              <div class="field"><label for="automationPreference">เมื่อมี OPF และ sidecar พร้อมกัน</label><select id="automationPreference"><option value="review">หยุดรอตรวจสอบ</option><option value="opf">ใช้ OPF</option><option value="json">ใช้ JSON sidecar</option></select></div>
+              <p class="helper">จับคู่ path ของ Grimmory กับโฟลเดอร์ NAS ที่ Adapter เห็น และใช้ marker ตรวจว่า NAS ยัง mount อยู่</p>
+              <div id="automationMappings"></div>
+              <fieldset style="margin:16px 0;border:1px solid var(--hairline,#dce3da);border-radius:8px"><legend>ฟิลด์ Metadata</legend><div id="automationFields" style="display:flex;gap:12px;flex-wrap:wrap"></div></fieldset>
+            </details>
+            <div class="actions"><button class="primary" id="saveAutomation" type="submit">บันทึก Auto และการตั้งค่า</button></div>
+          </form>
+          <div class="actions" style="margin-top:16px"><button class="primary" id="runAutomation">นำเข้า Metadata ที่มีอยู่</button></div>
+          <p class="helper" style="margin-top:10px">การนำเข้าครั้งแรกเติมเฉพาะช่องว่างใน Grimmory · ถ้าเพิ่งเพิ่มหนังสือ ให้ Grimmory สแกนเข้าคลังหนังสือก่อน</p>
           <div id="automationActivity" style="margin-top:20px" aria-live="polite">
             <div id="automationRuns"></div>
             <div id="automationResults"></div>
@@ -708,7 +710,9 @@
     $("preview").disabled = !online || !hasSelection() || metadataBusy || busy.has("logout");
     $("apply").disabled = !online || !reviewedPayload || currentPreview?.status !== "dry_run" || metadataBusy || busy.has("logout");
     $("diagnosticAuthHint").hidden = online; $("metadataAuthHint").hidden = online;
-    for (const id of ["loadAutomation", "bindAutomation", "runAutomation", "refreshActivity", "saveAutomation"]) $(id).disabled = !online || busy.has(id);
+    for (const id of ["loadAutomation", "bindAutomation", "runAutomation", "saveAutomation"]) $(id).disabled = !online || busy.has(id);
+    const selectedLibraryReady = Boolean(currentLibrary()?.policy);
+    $("runAutomation").disabled = !online || !selectedLibraryReady || busy.has("runAutomation");
     $("automationPolicyForm").inert = !online;
   };
   const work = async (id, label, fn) => {
@@ -728,7 +732,7 @@
     $("book").replaceChildren(new Option("เลือกไฟล์ต้นทางก่อน", ""));
     $("diagnosticChecks").replaceChildren(); $("diagnosticSummary").textContent = "เข้าสู่ระบบเพื่อเริ่มตรวจสอบ";
     $("sourceCount").textContent = "ยังไม่ได้สแกน"; say("scanMessage", ""); syncControls();
-    $("automationLibraries").replaceChildren(); clearActivity(); $("automationTools").hidden = true; autoData = null;
+    $("automationLibrary").replaceChildren(); clearActivity(); $("automationTools").hidden = true; autoData = null;
   };
   const request = async (path, options = {}) => {
     if (isPreviewMode) throw new Error("เปิดหน้านี้จาก URL ของ Adapter ก่อนใช้งาน");
@@ -908,15 +912,15 @@
   const stateLabels = { queued: "เข้าคิว / รอลองใหม่", running: "กำลังทำงาน", completed: "จบรอบตรวจ", cancelled: "หยุดแล้ว", blocked: "ต้องแก้การตั้งค่า", failed: "พบข้อผิดพลาด", no_source: "ไม่มี OPF/sidecar", waiting_stable: "รอไฟล์นิ่ง", needs_review: "รอตรวจข้อขัดแย้ง", backfill_required: "รอนำเข้าย้อนหลัง", updated: "อัปเดตแล้ว", partial: "อัปเดตบางส่วน", in_sync: "ข้อมูลตรงกัน", preview: "ตัวอย่าง", skipped: "ข้ามตามกติกา", retry_wait: "รอตรวจใหม่" };
   const node = (tag, text = "", className = "") => { const element = document.createElement(tag); element.textContent = text; element.className = className; return element; };
   const apiAutomation = (path, options = {}) => request("/local/automation" + path, { headers: headers(), ...options });
-  const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วระบบจะลองใหม่", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบหลาย source ที่ให้ข้อมูลต่างกัน เลือกชนิด source ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
+  const reasonLabels = { storage_unavailable: "อ่าน NAS ไม่ได้ ตรวจ mount และไฟล์ marker แล้วลองใหม่", library_path_not_mapped: "ยังไม่ได้จับคู่ตำแหน่งไฟล์นี้กับโฟลเดอร์ NAS เปิดการตั้งค่า NAS แล้วจับคู่ทุก path ของ Library จากนั้นบันทึก", background_account_reconnect_required: "กรุณาเชื่อมบัญชีงานเบื้องหลังใหม่", background_account_not_connected: "กรุณาเชื่อมบัญชีงานเบื้องหลังก่อนเริ่มงาน", disable_grimmory_file_persistence_and_moves_or_grant_settings_read: "ตรวจสิทธิ์อ่าน Settings และปิดการเขียน Metadata กลับไฟล์/ย้ายไฟล์ใน Grimmory", multiple_metadata_sources: "พบไฟล์ metadata หลายแบบที่ข้อมูลไม่ตรงกัน เลือกว่าจะใช้ OPF หรือ sidecar ในการตั้งค่า Library", OPFIdentityError: "ยืนยันไฟล์กับหนังสือไม่ได้ ตรวจว่า Grimmory สแกนไฟล์ปัจจุบันแล้ว", library_policy_changed_run_again: "การตั้งค่าเปลี่ยนระหว่างทำงาน กรุณาตรวจอีกครั้ง" };
   const currentLibrary = () => autoData?.libraries.find(library => String(library.id) === $("automationLibrary").value);
-  $("automationMode").onchange = () => { $("runAutomation").textContent = { check: "ตรวจและอัปเดตตอนนี้", preview: "สร้างตัวอย่าง", backfill_missing: "นำเข้าย้อนหลัง · เติมช่องว่าง", backfill_source: "นำเข้าย้อนหลัง · ใช้ค่าจาก source", retry: "ลองงานที่ค้างใหม่" }[$("automationMode").value]; };
   const renderPolicy = () => {
     const library = currentLibrary(); if (!library) return;
     const policy = library.policy;
     $("automationAuto").checked = policy?.autoEnabled || false;
     $("automationInterval").value = policy?.intervalSeconds || 300;
     $("automationPreference").value = policy?.sourcePreference || "review";
+    $("automationPolicyDetails").open = !policy;
     $("automationMappings").replaceChildren();
     for (const path of library.paths || []) {
       const row = node("div", "", "row"), rootField = node("div", "", "field"), markerField = node("div", "", "field");
@@ -945,15 +949,10 @@
     const previous = $("automationLibrary").value;
     autoData = data;
     $("automationAccount").textContent = !data.workerEnabled ? "Worker ปิดอยู่" : data.accountBlocked ? "บัญชีต้องเชื่อมต่อใหม่" : data.accountConnected ? "เชื่อมบัญชีงานเบื้องหลังแล้ว" : "ยังไม่ได้เชื่อมบัญชีงานเบื้องหลัง";
-    $("automationLibraries").replaceChildren(); $("automationLibrary").replaceChildren();
+    $("automationLibrary").replaceChildren();
     for (const library of data.libraries) {
-      const line = node("div", "", "check"), label = node("label"); label.style.cssText = "display:flex;align-items:center;gap:10px";
-      const select = node("input"); select.type = "checkbox"; select.value = String(library.id); select.dataset.runLibrary = "true"; select.checked = Boolean(library.policy); select.disabled = !library.policy; select.style.cssText = "width:18px;min-height:18px";
-      label.append(select, document.createTextNode(library.name));
-      const info = node("span", library.policy ? (library.policy.autoEnabled ? "Auto เปิด · สั่ง Manual ได้" : "Auto ปิด · สั่ง Manual ได้") : "รอตั้งค่าโฟลเดอร์", "status info");
-      if (library.nextDue) info.title = "รอบถัดไป " + new Date(library.nextDue * 1000).toLocaleString("th-TH");
-      line.append(label, info); $("automationLibraries").append(line);
-      $("automationLibrary").append(new Option(library.name, String(library.id)));
+      const state = !library.policy ? "ต้องตั้งค่าโฟลเดอร์" : library.policy.autoEnabled ? "Auto เปิด" : "Auto ปิด";
+      $("automationLibrary").append(new Option(`${library.name} · ${state}`, String(library.id)));
     }
     if (data.libraries.some(library => String(library.id) === previous)) $("automationLibrary").value = previous;
     $("automationTools").hidden = !data.libraries.length;
@@ -978,10 +977,10 @@
     });
   };
   $("runAutomation").onclick = () => automationAction("runAutomation", "กำลังเข้าคิว…", async () => {
-    const libraryIds = Array.from($("automationLibraries").querySelectorAll("input[data-run-library]:checked")).map(input => Number(input.value));
-    if (!libraryIds.length) throw new Error("เลือก Library ที่ตั้งค่าแล้วอย่างน้อยหนึ่งรายการ");
-    const result = await apiAutomation("/runs", { method: "POST", body: JSON.stringify({ libraryIds, mode: $("automationMode").value }) });
-    say("automationMessage", `เข้าคิวแล้ว ${result.runIds.length} Library · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์`, "success"); await refreshActivity();
+    const library = currentLibrary();
+    if (!library?.policy) throw new Error("ตั้งค่าโฟลเดอร์ NAS ของ Library นี้ก่อน");
+    const result = await apiAutomation("/runs", { method: "POST", body: JSON.stringify({ libraryIds: [library.id], mode: "backfill_missing" }) });
+    say("automationMessage", `เริ่มนำเข้า Metadata แล้ว · ปิดหน้าเว็บได้ งานจะทำต่อบนเซิร์ฟเวอร์`, "success"); await refreshActivity();
   });
   const refreshActivity = async (summary = false) => {
     const library = currentLibrary(); if (!library?.policy || activityLoading || !sessionToken || isPreviewMode) return;
@@ -1039,8 +1038,9 @@
             const { result } = await apiAutomation(bookEndpoint + "/activity");
             if (session !== sessionToken || !details.isConnected) return;
             body.replaceChildren();
-            if (result.reason) body.append(node("p", reasonLabels[result.reason] || result.reason, "feedback"));
-            body.append(node("pre", JSON.stringify(result, null, 2)));
+            if (result.reason) body.append(node("p", reasonLabels[result.reason] || "งานนี้ต้องตรวจสอบเพิ่มเติม", "feedback"));
+            const technical = node("details"), technicalSummary = node("summary", "รายละเอียดทางเทคนิค");
+            technical.append(technicalSummary, node("pre", JSON.stringify(result, null, 2))); body.append(technical);
             for (const field of Object.keys(result.conflicts || {})) {
               const line = node("div", "", "actions");
               line.append(node("span", field));
@@ -1076,7 +1076,6 @@
       }
     } finally { activityLoading = false; }
   };
-  $("refreshActivity").onclick = () => automationAction("refreshActivity", "กำลังโหลด…", refreshActivity);
   setInterval(() => {
     const interval = activityHasWork ? 5000 : 30000;
     if (!$("metadata").hidden && !document.hidden && autoData && sessionToken && !isPreviewMode && Date.now() - lastActivityPoll >= interval) {

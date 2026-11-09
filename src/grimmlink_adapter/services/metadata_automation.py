@@ -78,8 +78,43 @@ def check_storage(policy: LibraryPolicy) -> dict[int, Path]:
     return roots
 
 
+def _library_path_id(file: dict[str, Any], book: dict[str, Any], library: dict[str, Any]) -> int | None:
+    library_path = book.get("libraryPath")
+    if isinstance(library_path, dict) and type(library_path.get("id")) is int:
+        return library_path["id"]
+    explicit_id = book.get("libraryPathId")
+    if type(explicit_id) is int:
+        return explicit_id
+
+    raw_file_path = file.get("filePath")
+    if not isinstance(raw_file_path, str):
+        return None
+    file_path = PurePosixPath(raw_file_path)
+    if ".." in file_path.parts:
+        return None
+    matches: list[tuple[int, int]] = []
+    for candidate in library.get("paths", []):
+        if not isinstance(candidate, dict) or type(candidate.get("id")) is not int:
+            continue
+        raw_root = candidate.get("path")
+        if not isinstance(raw_root, str):
+            continue
+        root = PurePosixPath(raw_root)
+        try:
+            relative = file_path.relative_to(root)
+        except ValueError:
+            continue
+        if relative.parts:
+            matches.append((len(root.parts), candidate["id"]))
+    if not matches:
+        return None
+    longest = max(length for length, _ in matches)
+    ids = {path_id for length, path_id in matches if length == longest}
+    return next(iter(ids)) if len(ids) == 1 else None
+
+
 def mapped_book(file: dict[str, Any], book: dict[str, Any], library: dict[str, Any], policy: LibraryPolicy, roots: dict[int, Path]) -> tuple[Path, Path]:
-    library_path_id = (book.get("libraryPath") or {}).get("id")
+    library_path_id = _library_path_id(file, book, library)
     mappings = [m for m in policy.mappings if m.libraryPathId == library_path_id]
     paths = [p for p in library.get("paths", []) if p.get("id") == library_path_id]
     if len(mappings) != 1 or len(paths) != 1:
