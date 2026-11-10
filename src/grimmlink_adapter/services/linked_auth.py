@@ -5,6 +5,7 @@ from __future__ import annotations
 from grimmlink_adapter.official.auth import parse_jwt_expiry
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import OfficialAuthError, OfficialPermissionError
+from grimmlink_adapter.security.account_locks import credential_refresh_lock
 from grimmlink_adapter.state.linked_accounts import LinkedAccount, LinkedAccountStore
 
 
@@ -13,6 +14,13 @@ class LinkedAuthUnavailable(Exception):
 
 
 async def get_linked_bearer(
+    server: str, user_id: str, username: str, md5_key: str,
+) -> str:
+    async with credential_refresh_lock:
+        return await _get_linked_bearer(server, user_id, username, md5_key)
+
+
+async def _get_linked_bearer(
     server: str, user_id: str, username: str, md5_key: str,
 ) -> str:
     """Return a verified same-user token, refreshing it when needed."""

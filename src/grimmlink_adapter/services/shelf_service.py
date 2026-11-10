@@ -454,6 +454,41 @@ class ShelfService:
         await OutboxManager.mark_completed(action_id)
         return response
 
+    async def add_book_to_shelf(
+        self,
+        shelf_type: str,
+        shelf_id: int,
+        book_id: int,
+        creds: ClientCredentials | None = None,
+    ) -> dict[str, Any]:
+        """Assign a book to a regular shelf through Official's supported API."""
+        normalized_type = shelf_type.lower()
+        if normalized_type == "magic":
+            raise HTTPException(status_code=400, detail="Magic shelf membership is rule-derived and read-only.")
+        if normalized_type != "regular":
+            raise HTTPException(status_code=400, detail="Shelf type must be regular or magic.")
+
+        request_creds = creds or ClientCredentials()
+        bearer = await get_official_bearer(request_creds)
+        owner_key = self._owner_key(request_creds, bearer)
+        try:
+            await self.official_client.assign_shelves_to_books(
+                [book_id], [shelf_id], [], bearer,
+            )
+        except OfficialClientError as exc:
+            if isinstance(exc, OfficialAuthError):
+                raise HTTPException(status_code=401, detail="Upstream authentication failed.") from exc
+            if isinstance(exc, OfficialPermissionError):
+                raise HTTPException(status_code=403, detail="Shelf mutation was denied by Official Grimmory.") from exc
+            if isinstance(exc, (OfficialTimeoutError, OfficialTransportError)):
+                raise HTTPException(status_code=502, detail="Official shelf mutation timed out or is unavailable.") from exc
+            if isinstance(exc, OfficialBadResponseError):
+                raise _upstream_error(exc, "Official shelf mutation failed.") from exc
+            raise HTTPException(status_code=502, detail="Official shelf mutation failed.") from exc
+
+        await ShelfOwnershipCache.record_ownership(book_id, shelf_id, normalized_type, owner_key)
+        return {"shelfId": shelf_id, "bookId": book_id, "shelfType": normalized_type, "added": True}
+
     async def register_managed_file(
         self,
         book_id: int,

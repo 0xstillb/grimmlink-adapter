@@ -1,0 +1,37 @@
+# Adapter-only Pi deployment. Place a private .env beside this file.
+# The NAS host mount and read-only Grimmory DB account already exist on the Pi.
+services:
+  grimmlink-adapter:
+    image: ghcr.io/0xstillb/grimmlink-adapter:0.1.13
+    container_name: grimmlink-adapter
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      ADAPTER_HOST: ${LAN_IP:?Set LAN_IP to the Pi LAN address}
+      ADAPTER_PORT: "8085"
+      GRIMMORY_BASE_URL: http://${LAN_IP}:6060
+      GRIMMORY_DB_ENABLED: "true"
+      GRIMMORY_DB_HOST: ${GRIMMORY_DB_HOST:?Set the existing MariaDB container address}
+      SQLITE_DB_PATH: /app/data/grimmlink_adapter.db
+      MIGRATIONS_DIR: /app/migrations
+      MDNS_ENABLED: "true"
+      MDNS_IPV4: ${LAN_IP}
+      METADATA_IMPORT_ROOTS: '["/imports"]'
+      METADATA_INGESTION_MODE: api_only
+      METADATA_FALLBACK: none
+      METADATA_WORKER_ENABLED: "true"
+    volumes:
+      - type: volume
+        source: adapter_data
+        target: /app/data
+      - type: bind
+        source: ${NAS_ROOT:?Set NAS_ROOT to Grimmory's current host NAS mount}
+        target: /imports
+        read_only: true
+        bind:
+          create_host_path: false
+volumes:
+  adapter_data:
+    external: true
+    name: grimmlink_adapter_data

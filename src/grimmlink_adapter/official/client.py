@@ -17,7 +17,9 @@ Invariants:
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any, Literal, cast, overload
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
@@ -39,12 +41,12 @@ from grimmlink_adapter.official.endpoints import (
     OFFICIAL_BOOK_BY_ID,
     OFFICIAL_BOOK_DOWNLOAD,
     OFFICIAL_BOOK_METADATA,
-    OFFICIAL_BOOK_PROGRESS,
     OFFICIAL_BOOK_SIDECAR_IMPORT,
     OFFICIAL_BOOKMARK_BY_ID,
     OFFICIAL_BOOKMARKS,
     OFFICIAL_BOOKMARKS_BOOK,
     OFFICIAL_BOOKS_PERSONAL_RATING,
+    OFFICIAL_BOOKS_PROGRESS,
     OFFICIAL_BOOKS_RESET_PERSONAL_RATING,
     OFFICIAL_BOOKS_STATUS,
     OFFICIAL_HEALTHCHECK,
@@ -862,49 +864,29 @@ class OfficialGrimmoryClient:
             return {}
         return self._parse_json(resp, "PUT", OFFICIAL_KOREADER_PROGRESS)
 
-    async def get_app_book_progress(self, book_id: int, bearer_token: str) -> dict[str, Any]:
-        """Fetch the authenticated WebUI/app progress projection for a book."""
-        url = OFFICIAL_BOOK_PROGRESS.format(bookId=book_id)
-        resp = await self._send_request(
-            method="GET", path=url, auth_mode=AuthMode.NONE,
-            headers={"Authorization": f"Bearer {bearer_token}"},
-        )
-        if resp.status_code in (401, 403):
-            raise OfficialPermissionError(
-                "Unauthorized access to book progress", status_code=resp.status_code,
-                method="GET", url=url, response_body=resp.text,
-            )
-        if resp.status_code != 200:
-            raise OfficialBadResponseError(
-                f"Failed to fetch book progress: HTTP {resp.status_code}",
-                status_code=resp.status_code, method="GET", url=url,
-                response_body=resp.text,
-            )
-        return self._parse_json(resp, "GET", url)
-
     async def update_book_progress(
         self, book_id: int, payload: dict[str, Any], bearer_token: str,
     ) -> dict[str, Any]:
-        """Write the WebUI/app projection using Official's JWT endpoint."""
-        url = OFFICIAL_BOOK_PROGRESS.format(bookId=book_id)
+        """Write a book progress projection through Official's Book API."""
         resp = await self._send_request(
-            method="PUT", path=url, auth_mode=AuthMode.NONE,
-            headers={"Authorization": f"Bearer {bearer_token}"}, json=payload,
+            method="POST", path=OFFICIAL_BOOKS_PROGRESS, auth_mode=AuthMode.NONE,
+            headers={"Authorization": f"Bearer {bearer_token}"},
+            json={**payload, "bookId": book_id},
         )
         if resp.status_code in (401, 403):
             raise OfficialPermissionError(
                 "Unauthorized update of book progress", status_code=resp.status_code,
-                method="PUT", url=url, response_body=resp.text,
+                method="POST", url=OFFICIAL_BOOKS_PROGRESS, response_body=resp.text,
             )
         if resp.status_code not in (200, 201, 202, 204):
             raise OfficialBadResponseError(
                 f"Failed to update book progress: HTTP {resp.status_code}",
-                status_code=resp.status_code, method="PUT", url=url,
+                status_code=resp.status_code, method="POST", url=OFFICIAL_BOOKS_PROGRESS,
                 response_body=resp.text,
             )
         if resp.status_code == 204 or not resp.content:
             return {}
-        return self._parse_json(resp, "PUT", url)
+        return self._parse_json(resp, "POST", OFFICIAL_BOOKS_PROGRESS)
 
     async def update_read_status(
         self, book_id: int, read_status: str, bearer_token: str,
@@ -949,10 +931,19 @@ class OfficialGrimmoryClient:
             path=url,
             auth_mode=AuthMode.NONE,
             headers=headers,
+            params={"withDescription": "true"},
         )
-        if resp.status_code in (401, 403):
+        if resp.status_code == 401:
             raise OfficialAuthError(
                 "Unauthorized access to book",
+                status_code=resp.status_code,
+                method="GET",
+                url=url,
+                response_body=resp.text,
+            )
+        if resp.status_code == 403:
+            raise OfficialPermissionError(
+                "Forbidden access to book",
                 status_code=resp.status_code,
                 method="GET",
                 url=url,
@@ -967,6 +958,93 @@ class OfficialGrimmoryClient:
                 response_body=resp.text,
             )
         return self._parse_json(resp, "GET", url)
+
+    async def metadata_read(
+        self, path: str, bearer_token: str, params: dict[str, Any] | None = None,
+        *, expected_shape: Literal["object", "array"] = "object",
+    ) -> dict[str, Any] | list[Any]:
+        """Explicit-token reads with no implicit switch to another JWT identity."""
+        resp = await self._send_request(method="GET", path=path, auth_mode=AuthMode.NONE,
+                                        headers={"Authorization": f"Bearer {bearer_token}"}, params=params)
+        if resp.status_code in (401, 403):
+            raise OfficialAuthError("Metadata account needs authorization", status_code=resp.status_code)
+        if resp.status_code != 200:
+            raise OfficialBadResponseError("Metadata discovery failed", status_code=resp.status_code)
+        return self._parse_json(resp, "GET", path, expected_shape=expected_shape)
+
+    async def get_libraries(self, bearer_token: str) -> list[dict[str, Any]]:
+        data = await self.metadata_read("/api/v1/libraries", bearer_token, expected_shape="array")
+        if not isinstance(data, list) or any(not isinstance(x, dict) or not isinstance(x.get("id"), int) for x in data):
+            raise OfficialBadResponseError("Malformed library list")
+        return data
+
+    async def get_library(self, library_id: int, bearer_token: str) -> dict[str, Any]:
+        data = await self.metadata_read(f"/api/v1/libraries/{library_id}", bearer_token)
+        if not isinstance(data, dict) or data.get("id") != library_id:
+            raise OfficialBadResponseError("Malformed library details")
+        return data
+
+    async def get_library_books(self, library_id: int, bearer_token: str) -> list[dict[str, Any]]:
+        """Collect a complete library snapshot for callers that need the whole list."""
+        return [book async for page in self.iter_library_book_pages(library_id, bearer_token) for book in page]
+
+    async def iter_library_book_pages(
+        self, library_id: int, bearer_token: str,
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        """Yield compact catalog pages. The caller must exhaust pagination before applying writes."""
+        path = "/api/v1/books/page"
+        params: dict[str, Any] = {"facet": f"library:{library_id}", "sort": "title", "size": 100}
+        seen: set[int] = set()
+        cursors: set[str] = set()
+        total: int | None = None
+        while True:
+            data = await self.metadata_read(path, bearer_token, params)
+            if not isinstance(data, dict) or not isinstance(data.get("content"), list) or not isinstance(data.get("page"), dict):
+                raise OfficialBadResponseError("Unsupported paginated book response")
+            count = data["page"].get("totalElements")
+            if type(count) is not int or count < 0 or count > settings.METADATA_MAX_BOOKS_PER_RUN or (total is not None and count != total):
+                raise OfficialBadResponseError("Library snapshot changed or exceeds the configured limit")
+            total = count
+            books: list[dict[str, Any]] = []
+            for book in data["content"]:
+                if not isinstance(book, dict) or type(book.get("id")) is not int or book["id"] in seen or book.get("libraryId") != library_id:
+                    raise OfficialBadResponseError("Ambiguous library snapshot")
+                seen.add(book["id"])
+                summary = {key: book[key] for key in ("id", "libraryId", "libraryPath", "title", "addedOn") if key in book}
+                file_keys = ("id", "filePath", "fileName", "folderBased")
+                primary = book.get("primaryFile")
+                metadata = book.get("metadata")
+                title = metadata.get("title") if isinstance(metadata, dict) else None
+                if not isinstance(title, str) or not title.strip():
+                    title = summary.get("title")
+                if (not isinstance(title, str) or not title.strip()) and isinstance(primary, dict):
+                    file_name = primary.get("fileName")
+                    title = file_name.rsplit(".", 1)[0] if isinstance(file_name, str) else None
+                if isinstance(title, str) and title.strip():
+                    summary["title"] = title.strip()[:512]
+                if isinstance(primary, dict):
+                    summary["primaryFile"] = {key: primary[key] for key in file_keys if key in primary}
+                alternatives = book.get("alternativeFormats")
+                if isinstance(alternatives, list):
+                    summary["alternativeFormats"] = [
+                        {key: file[key] for key in file_keys if key in file}
+                        for file in alternatives if isinstance(file, dict)
+                    ]
+                books.append(summary)
+            if len(seen) == total:
+                yield books
+                return
+            if not books or len(seen) > total:
+                raise OfficialBadResponseError("Incomplete library snapshot")
+            next_links = [x for x in data.get("links", []) if isinstance(x, dict) and "next" in x.get("rel", [])]
+            if len(next_links) != 1:
+                raise OfficialBadResponseError("Missing library pagination cursor")
+            values = parse_qs(urlsplit(next_links[0].get("href", "")).query).get("cursor", [])
+            if len(values) != 1 or values[0] in cursors:
+                raise OfficialBadResponseError("Repeated library pagination cursor")
+            cursors.add(values[0])
+            params["cursor"] = values[0]
+            yield books
 
     async def update_book_metadata(
         self,

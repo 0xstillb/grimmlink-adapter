@@ -80,6 +80,94 @@ class GrimmoryIdentityLookup:
         """Return every active book row matching initial_hash exactly."""
         return await self._query(_INITIAL_HASH_QUERY, book_hash)
 
+    async def diagnose(self) -> dict[str, object]:
+        """Verify credentials and SELECT access to the exact schema used for hash resolution."""
+        if not self.config.GRIMMORY_DB_ENABLED:
+            return {
+                "name": "grimmoryIdentityDatabase",
+                "status": "warning",
+                "summary": "Read-only Grimmory database lookup is disabled; unknown hashes cannot be resolved on first sync.",
+                "action": "Enable GRIMMORY_DB_ENABLED and configure a dedicated SELECT-only account, then restart the Adapter.",
+                "details": {"enabled": False},
+            }
+
+        host = self.config.GRIMMORY_DB_HOST
+        username = self.config.GRIMMORY_DB_USER
+        password = self.config.GRIMMORY_DB_PASSWORD
+        database = self.config.GRIMMORY_DB_NAME
+        if (
+            not host or not host.strip() or not username or not username.strip()
+            or password is None or not password.get_secret_value()
+            or not database or not database.strip()
+        ):
+            return {
+                "name": "grimmoryIdentityDatabase",
+                "status": "fail",
+                "summary": "Read-only database lookup is enabled, but required connection settings are incomplete.",
+                "action": "Set GRIMMORY_DB_HOST, GRIMMORY_DB_NAME, GRIMMORY_DB_USER, and GRIMMORY_DB_PASSWORD, then restart the Adapter.",
+                "details": {"enabled": True, "settingsComplete": False},
+            }
+
+        connection: aiomysql.Connection | None = None
+        try:
+            ssl_context = ssl.create_default_context(cafile=self.config.GRIMMORY_DB_SSL_CA) if self.config.GRIMMORY_DB_SSL_CA else None
+            connection = await asyncio.wait_for(
+                aiomysql.connect(
+                    host=host,
+                    port=self.config.GRIMMORY_DB_PORT,
+                    user=username,
+                    password=password.get_secret_value(),
+                    db=database,
+                    connect_timeout=self.config.GRIMMORY_DB_CONNECT_TIMEOUT,
+                    autocommit=True,
+                    charset="utf8mb4",
+                    cursorclass=aiomysql.DictCursor,
+                    ssl=ssl_context,
+                ),
+                timeout=self.config.GRIMMORY_DB_CONNECT_TIMEOUT + 1.0,
+            )
+            await asyncio.wait_for(
+                self._fetch_rows(connection, _CURRENT_HASH_QUERY, "__grimmlink_diagnostic_probe__"),
+                timeout=self.config.GRIMMORY_DB_QUERY_TIMEOUT,
+            )
+            return {
+                "name": "grimmoryIdentityDatabase",
+                "status": "ok",
+                "summary": "Database connection and required read-only hash query succeeded.",
+                "details": {
+                    "enabled": True,
+                    "settingsComplete": True,
+                    "query": "book_file current_hash with book/library joins",
+                    "writesPerformed": False,
+                },
+            }
+        except Exception as exc:
+            error_code: str | int = type(exc).__name__
+            if getattr(exc, "args", None) and isinstance(exc.args[0], int):
+                error_code = exc.args[0]
+            if error_code in (1044, 1045, 1142, 1143):
+                action = "Grant SELECT on book, book_file, library, and library_path to this account; do not grant write permissions."
+                summary = "Database credentials or SELECT permissions were rejected."
+            elif error_code == 1049:
+                action = "Check GRIMMORY_DB_NAME against the Grimmory database name."
+                summary = "The configured Grimmory database name was not found."
+            elif error_code in (2003, 2005, 2006, 2013, "TimeoutError", "gaierror", "ConnectionRefusedError"):
+                action = "Check the database host, port, DNS, firewall, and container network."
+                summary = "The Adapter could not reach the Grimmory database."
+            else:
+                action = "Check connection settings, TLS configuration, and that the database schema matches Grimmory 3.5 or later."
+                summary = "The read-only identity query failed."
+            return {
+                "name": "grimmoryIdentityDatabase",
+                "status": "fail",
+                "summary": summary,
+                "action": action,
+                "details": {"enabled": True, "settingsComplete": True, "errorCode": error_code},
+            }
+        finally:
+            if connection is not None:
+                connection.close()
+
     async def _query(self, query: str, book_hash: str) -> list[GrimmoryIdentityCandidate]:
         if not self.config.GRIMMORY_DB_ENABLED:
             return []
@@ -87,7 +175,11 @@ class GrimmoryIdentityLookup:
         host = self.config.GRIMMORY_DB_HOST
         username = self.config.GRIMMORY_DB_USER
         password = self.config.GRIMMORY_DB_PASSWORD
-        if not host or not username or password is None or not self.config.GRIMMORY_DB_NAME:
+        if (
+            not host or not host.strip() or not username or not username.strip()
+            or password is None or not password.get_secret_value()
+            or not self.config.GRIMMORY_DB_NAME.strip()
+        ):
             raise GrimmoryIdentityLookupError(
                 "Grimmory read-only DB lookup is enabled but its connection settings are incomplete"
             )

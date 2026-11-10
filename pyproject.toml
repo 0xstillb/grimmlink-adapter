@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grimmlink-adapter"
-version = "0.1.0"
+version = "0.1.13"
 description = "Standalone adapter bridging KOReader GrimmLink to stock Official Grimmory"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,8 @@ dependencies = [
     "pydantic-settings>=2.4.0",
     "aiosqlite>=0.20.0",
     "aiomysql>=0.2.0",
+    "zeroconf>=0.153.0,<1.0",
+    "cryptography>=43,<49",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +34,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/grimmlink_adapter"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/grimmlink_adapter/static/metadata.html" = "grimmlink_adapter/static/metadata.html"
 
 [tool.ruff]
 target-version = "py312"

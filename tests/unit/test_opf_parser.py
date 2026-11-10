@@ -80,6 +80,14 @@ def test_discovery_is_deterministic_and_rejects_ambiguity(tmp_path: Path) -> Non
         discover_opf(book, root=tmp_path)
 
 
+def test_discovery_treats_brackets_in_book_name_literally(tmp_path: Path) -> None:
+    book = tmp_path / "Novel [รักนี้ผีจัดให้].pdf"
+    book.write_bytes(b"book")
+    opf = tmp_path / "Novel [รักนี้ผีจัดให้].opf"
+    opf.write_text(OPF, encoding="utf-8")
+    assert discover_opf(book, root=tmp_path) == opf
+
+
 def test_discovery_rejects_path_escape(tmp_path: Path) -> None:
     outside = tmp_path.parent / "outside.opf"
     outside.write_text(OPF, encoding="utf-8")

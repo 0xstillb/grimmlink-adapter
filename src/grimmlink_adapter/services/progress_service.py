@@ -159,6 +159,11 @@ def snapshot_from_grimmlink(payload: KoreaderProgressPayload) -> ProgressSnapsho
         book_file_id=payload.bookFileId,
         format=fmt,
         native_location=native,
+        cfi=payload.cfi or (native if native and native.lower().startswith("epubcfi(") else None),
+        xpointer=payload.xpointer or payload.rawKoreaderLocation or (
+            native if native and not native.lower().startswith("epubcfi(") and reflowable else None
+        ),
+        href=payload.href,
         current_page=current_page,
         total_pages=total_pages,
         display_percent=display_percent,
@@ -197,6 +202,9 @@ def snapshot_from_official(payload: dict[str, Any], requested_hash: str) -> Prog
         book_file_id=payload.get("bookFileId"),
         format=fmt,
         native_location=native,
+        cfi=native if native and native.lower().startswith("epubcfi(") else None,
+        xpointer=native if native and reflowable and not native.lower().startswith("epubcfi(") else None,
+        href=payload.get("href"),
         current_page=current_page,
         total_pages=total_pages,
         display_percent=display_percent,
@@ -221,6 +229,9 @@ def snapshot_to_grimmlink(snapshot: ProgressSnapshot) -> KoreaderProgressPayload
         percentage=snapshot.display_percent,
         progress=snapshot.native_location,
         location=snapshot.native_location if snapshot.is_reflowable else None,
+        cfi=snapshot.cfi,
+        xpointer=snapshot.xpointer,
+        href=snapshot.href,
         currentPage=snapshot.current_page,
         totalPages=snapshot.total_pages,
         updatedAt=snapshot.updated_at.isoformat().replace("+00:00", "Z") if snapshot.updated_at else None,
@@ -294,11 +305,11 @@ class ProgressService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Numeric-only location is invalid for reflowable progress.")
 
     @staticmethod
-    def _app_progress_snapshot(
+    def _book_progress_snapshot(
         payload: dict[str, Any], requested_hash: str, book_id: int, book_file_id: int | None,
         prior: ProgressSnapshot | None = None,
     ) -> ProgressSnapshot | None:
-        """Project Official's app progress response into the canonical snapshot."""
+        """Project Official's enriched Book DTO into the canonical snapshot."""
         if not isinstance(payload, dict):
             return None
         raw: dict[str, Any] = {
@@ -306,6 +317,7 @@ class ProgressService:
             "updatedAt": payload.get("lastReadTime"),
         }
         pdf = payload.get("pdfProgress")
+        cbx = payload.get("cbxProgress")
         epub = payload.get("epubProgress")
         if isinstance(pdf, dict) and pdf.get("page") is not None:
             raw.update({
@@ -314,10 +326,19 @@ class ProgressService:
             })
             if prior is not None and prior.total_pages is not None:
                 raw["totalPages"] = prior.total_pages
+        elif isinstance(cbx, dict) and cbx.get("page") is not None:
+            raw.update({
+                "fileFormat": prior.format if prior and prior.is_fixed_page else "CBZ",
+                "progress": str(cbx.get("page")),
+                "currentPage": cbx.get("page"), "percentage": cbx.get("percentage"),
+            })
+            if prior is not None and prior.total_pages is not None:
+                raw["totalPages"] = prior.total_pages
         elif isinstance(epub, dict):
             raw.update({
                 "fileFormat": "EPUB", "progress": epub.get("cfi"),
-                "location": epub.get("cfi"), "percentage": epub.get("percentage"),
+                "location": epub.get("cfi"), "href": epub.get("href"),
+                "percentage": epub.get("percentage"),
             })
         else:
             koreader = payload.get("koreaderProgress")
@@ -333,53 +354,73 @@ class ProgressService:
             if isinstance(pdf, dict) and pdf.get("percentage") is not None:
                 snapshot.display_percent = normalize_grimmlink_percent(pdf.get("percentage"))
                 snapshot.official_fraction = grimmlink_percent_to_official_fraction(snapshot.display_percent)
+            elif isinstance(cbx, dict) and cbx.get("percentage") is not None:
+                snapshot.display_percent = normalize_grimmlink_percent(cbx.get("percentage"))
+                snapshot.official_fraction = grimmlink_percent_to_official_fraction(snapshot.display_percent)
             elif isinstance(epub, dict) and epub.get("percentage") is not None:
                 snapshot.display_percent = normalize_grimmlink_percent(epub.get("percentage"))
                 snapshot.official_fraction = grimmlink_percent_to_official_fraction(snapshot.display_percent)
+            if isinstance(epub, dict):
+                snapshot.cfi = epub.get("cfi") or snapshot.cfi
+                snapshot.href = epub.get("href") or snapshot.href
         return snapshot
 
     @staticmethod
     def _projection_payload(snapshot: ProgressSnapshot) -> dict[str, Any]:
         if snapshot.display_percent is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Progress percentage is required.")
+        if snapshot.book_file_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="bookFileId is required for the current Book API progress contract.")
+
+        def file_progress(position_data: str | None) -> dict[str, Any]:
+            data: dict[str, Any] = {
+                "bookFileId": snapshot.book_file_id,
+                "progressPercent": snapshot.display_percent,
+            }
+            if position_data is not None:
+                data["positionData"] = position_data
+            if snapshot.href is not None:
+                data["positionHref"] = snapshot.href
+            return {"fileProgress": data}
+
         if snapshot.is_fixed_page:
             page = snapshot.current_page
             if page is None and snapshot.native_location is not None:
                 page = _page(snapshot.native_location)
             if page is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PDF page is required.")
-            return {"pdfProgress": {"page": page, "percentage": snapshot.display_percent}}
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fixed-page position is required.")
+            return file_progress(str(page))
         if snapshot.is_reflowable:
-            if snapshot.native_location is None or not snapshot.native_location.lower().startswith("epubcfi("):
+            cfi = snapshot.cfi or (
+                snapshot.native_location
+                if snapshot.native_location and snapshot.native_location.lower().startswith("epubcfi(")
+                else None
+            )
+            if cfi is None:
                 raise HTTPException(
                     status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                    detail="Official app projection requires a verified EPUB CFI; use KOReader native sync for XPointer locations.",
+                    detail="Grimmory Book API projection requires a verified EPUB CFI; use KOReader native sync for XPointer locations.",
                 )
-            return {"epubProgress": {
-                "cfi": snapshot.native_location,
-                "href": None,
-                "percentage": snapshot.display_percent,
-            }}
-        if snapshot.book_file_id is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="bookFileId is required for this format.")
-        return {"fileProgress": {
-            "bookFileId": snapshot.book_file_id,
-            "positionData": snapshot.native_location,
-            "positionHref": None,
-            "progressPercent": snapshot.display_percent,
-        }}
+            return file_progress(cfi)
+        return file_progress(snapshot.native_location)
 
     @staticmethod
     def _koreader_payload(snapshot: ProgressSnapshot) -> dict[str, Any]:
         """Build the native KOReader payload used by Official's sync route."""
+        native_location = snapshot.xpointer or snapshot.native_location
+        if snapshot.is_fixed_page:
+            page = snapshot.current_page
+            if page is None and native_location is not None:
+                page = _page(native_location)
+            native_location = str(page) if page is not None else native_location
         payload: dict[str, Any] = {
             "document": snapshot.book_hash,
             "bookHash": snapshot.book_hash,
             "bookId": snapshot.book_id,
             "bookFileId": snapshot.book_file_id,
             "fileFormat": snapshot.format,
-            "progress": snapshot.native_location,
-            "location": snapshot.native_location if snapshot.is_reflowable else None,
+            "progress": native_location,
+            "location": native_location if snapshot.is_reflowable else None,
             "percentage": snapshot.official_fraction,
             "currentPage": snapshot.current_page,
             "totalPages": snapshot.total_pages,
@@ -428,10 +469,10 @@ class ProgressService:
             owner_key = f"user:{getattr(bearer, 'user_id', '')}"
             prior = await ProgressStateCache.get(owner_key, book_hash)
             try:
-                raw = await self.official_client.get_app_book_progress(book_id, bearer)
+                raw = await self.official_client.get_book_by_id(book_id, bearer)
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
-            snapshot = self._app_progress_snapshot(raw, book_hash, book_id, book_file_id, prior)
+            snapshot = self._book_progress_snapshot(raw, book_hash, book_id, book_file_id, prior)
         else:
             username, md5_key = self._require_md5(creds)
             try:
@@ -509,38 +550,49 @@ class ProgressService:
                 except OfficialClientError as exc:
                     raise self._upstream_error(exc) from exc
                 projection = "koreader-native"
+                read_status = "failed"
                 try:
-                    projection_bearer, resolved_book_id, _, _ = await self._resolve_bearer_book(
+                    projection_bearer, resolved_book_id, resolved_file_id, resolved_format = await self._resolve_bearer_book(
                         creds, snapshot.book_hash, snapshot.book_id,
                     )
+                    snapshot.book_id = resolved_book_id
+                    snapshot.book_file_id = snapshot.book_file_id or resolved_file_id
+                    self._reconcile_identity(snapshot, resolved_file_id, resolved_format)
                     page = snapshot.current_page
                     if page is None and snapshot.native_location is not None:
                         page = _page(snapshot.native_location)
                     if page is None:
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PDF page is required.")
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fixed-page position is required.")
+                    snapshot.current_page = page
                     await self.official_client.update_book_progress(
                         resolved_book_id,
-                        {"pdfProgress": {"page": page, "percentage": snapshot.display_percent}},
+                        self._projection_payload(snapshot),
                         projection_bearer,
                     )
-                    if await self._mark_reading_if_started(
+                    read_status = await self._mark_reading_if_started(
                         resolved_book_id,
                         projection_bearer,
                         snapshot.current_page is not None or bool(snapshot.native_location),
-                    ):
-                        projection = "koreader-native+official-app+reading-status"
+                    )
+                    if read_status == "updated":
+                        projection = "koreader-native+official-book-api+reading-status"
                     else:
-                        projection = "koreader-native+official-app"
+                        projection = "koreader-native+official-book-api"
                 except (HTTPException, OfficialClientError) as exc:
                     # Native KOReader sync already succeeded. Keep that result
-                    # visible to the device, but make an App projection failure
+                    # visible to the device, but make a Book API projection failure
                     # explicit in the Adapter log instead of hiding it.
-                    logger.warning("PDF App progress projection failed after native sync: %s", type(exc).__name__)
+                    logger.warning("PDF Book API progress projection failed after native sync: %s", type(exc).__name__)
                 await ProgressStateCache.put(owner_key, snapshot)
                 extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
                 return {
                     "status": "progress updated",
                     "projection": projection,
+                    "readStatus": {
+                        "status": read_status,
+                        "value": "READING" if read_status == "updated" else None,
+                        "source": "position",
+                    },
                     **extras,
                 }
             # A newer manual status must win without requiring a network lookup.
@@ -582,33 +634,76 @@ class ProgressService:
             owner_key = f"user:{getattr(bearer, 'user_id', '')}"
             prior = await ProgressStateCache.get(owner_key, snapshot.book_hash)
             try:
-                current_app = self._app_progress_snapshot(
-                    await self.official_client.get_app_book_progress(snapshot.book_id, bearer),
+                current_book = self._book_progress_snapshot(
+                    await self.official_client.get_book_by_id(snapshot.book_id, bearer),
                     snapshot.book_hash, snapshot.book_id, snapshot.book_file_id, prior,
                 )
             except OfficialClientError as exc:
                 if getattr(exc, "status_code", None) == 404:
-                    current_app = None
+                    current_book = None
                 else:
                     raise self._upstream_error(exc) from exc
-            conflict = self._timestamp_conflict(snapshot, current_app)
+            conflict = self._timestamp_conflict(snapshot, current_book)
             if conflict is not None:
                 return conflict
-            try:
-                await self.official_client.update_book_progress(
-                    snapshot.book_id, self._projection_payload(snapshot), bearer,
+            if snapshot.is_reflowable and not snapshot.cfi and not snapshot.xpointer:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="EPUB progress requires a CFI or KOReader XPointer.",
                 )
-            except OfficialClientError as exc:
-                raise self._upstream_error(exc) from exc
-            status_marked = await self._mark_reading_if_started(
+            has_official_projection = not (
+                snapshot.is_reflowable
+                and not snapshot.cfi
+                and not (snapshot.native_location or "").lower().startswith("epubcfi(")
+            )
+            if has_official_projection:
+                try:
+                    await self.official_client.update_book_progress(
+                        snapshot.book_id, self._projection_payload(snapshot), bearer,
+                    )
+                except OfficialClientError as exc:
+                    raise self._upstream_error(exc) from exc
+            native_sync = "not-requested"
+            if creds.username and creds.md5_key:
+                if snapshot.is_fixed_page or snapshot.xpointer:
+                    try:
+                        await self.official_client.update_koreader_progress(
+                            self._koreader_payload(snapshot), creds.username, creds.md5_key,
+                        )
+                        native_sync = "synced"
+                    except OfficialClientError as exc:
+                        logger.warning("Native KOReader progress sync failed after Book API projection=%s: %s", has_official_projection, type(exc).__name__)
+                        native_sync = "failed"
+                        if not has_official_projection:
+                            raise self._upstream_error(exc) from exc
+                elif snapshot.is_reflowable:
+                    native_sync = "skipped-xpointer-required"
+            elif not has_official_projection:
+                raise HTTPException(
+                    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                    detail="This EPUB update contains only a KOReader XPointer; a linked KOSync identity is required.",
+                )
+            read_status = await self._mark_reading_if_started(
                 snapshot.book_id,
                 bearer,
-                snapshot.current_page is not None or bool(snapshot.native_location),
+                (has_official_projection or native_sync == "synced")
+                and (snapshot.current_page is not None or bool(snapshot.native_location)),
             )
             await ProgressStateCache.put(owner_key, snapshot)
             return {
                 "status": "progress updated",
-                "projection": "official-app+reading-status" if status_marked else "official-app",
+                "projection": (
+                    "official-book-api+reading-status" if read_status == "updated" and has_official_projection
+                    else "official-book-api" if has_official_projection
+                    else "koreader-native+reading-status" if read_status == "updated"
+                    else "koreader-native"
+                ),
+                "nativeSync": native_sync,
+                "readStatus": {
+                    "status": read_status,
+                    "value": "READING" if read_status == "updated" else None,
+                    "source": "position",
+                },
             }
 
         assert username is not None and md5_key is not None
@@ -628,18 +723,18 @@ class ProgressService:
                 if creds.bearer_token:
                     owner_key = f"user:{getattr(projection_bearer, 'user_id', '')}"
                 prior = await ProgressStateCache.get(owner_key, snapshot.book_hash)
-                current_app = self._app_progress_snapshot(
-                    await self.official_client.get_app_book_progress(
+                current_book = self._book_progress_snapshot(
+                    await self.official_client.get_book_by_id(
                         snapshot.book_id, projection_bearer,
                     ),
                     snapshot.book_hash, snapshot.book_id, snapshot.book_file_id, prior,
                 )
             except OfficialClientError as exc:
                 if getattr(exc, "status_code", None) == 404:
-                    current_app = None
+                    current_book = None
                 else:
                     raise self._upstream_error(exc) from exc
-            conflict = self._timestamp_conflict(snapshot, current_app)
+            conflict = self._timestamp_conflict(snapshot, current_book)
             if conflict is not None:
                 return conflict
             try:
@@ -649,7 +744,7 @@ class ProgressService:
             except OfficialClientError as exc:
                 raise self._upstream_error(exc) from exc
             await ProgressStateCache.put(owner_key, snapshot)
-            return {"status": "progress updated", "projection": "official-app"}
+            return {"status": "progress updated", "projection": "official-book-api"}
 
         current = md5_current
 
@@ -681,41 +776,49 @@ class ProgressService:
         except OfficialClientError as exc:
             raise self._upstream_error(exc) from exc
 
-        status_marked = False
+        read_status = "skipped"
         if snapshot.current_page is not None or snapshot.native_location:
             try:
                 projection_bearer, resolved_book_id, _, _ = await self._resolve_bearer_book(
                     creds, snapshot.book_hash, snapshot.book_id,
                 )
-                status_marked = await self._mark_reading_if_started(
+                read_status = await self._mark_reading_if_started(
                     resolved_book_id,
                     projection_bearer,
                     snapshot.current_page is not None or bool(snapshot.native_location),
                 )
             except (HTTPException, OfficialClientError) as exc:
                 logger.warning("Could not resolve EPUB identity for first-progress status: %s", type(exc).__name__)
+                read_status = "failed"
         await ProgressStateCache.put(owner_key, snapshot)
         extras = {key: value for key, value in result.items() if key in {"updated", "message"}}
         response = {"status": "progress updated", **extras} if isinstance(result, dict) else {"status": "progress updated"}
-        if status_marked:
+        response["readStatus"] = {
+            "status": read_status,
+            "value": "READING" if read_status == "updated" else None,
+            "source": "position",
+        }
+        if read_status == "updated":
             response["projection"] = "koreader-native+reading-status"
         return response
 
     async def _mark_reading_if_started(
         self, book_id: int, bearer: str, has_position: bool,
-    ) -> bool:
+    ) -> str:
         """Mark an untouched book as READING after its first real position."""
         if not has_position:
-            return False
+            return "skipped"
         try:
-            current = await self.official_client.get_app_book_progress(book_id, bearer)
-            if not isinstance(current, dict) or current.get("readStatus") != "UNREAD":
-                return False
+            current = await self.official_client.get_book_by_id(book_id, bearer)
+            if not isinstance(current, dict) or not isinstance(current.get("readStatus"), str):
+                return "failed"
+            if current.get("readStatus") != "UNREAD":
+                return "unchanged"
             await self.official_client.update_read_status(book_id, "READING", bearer)
-            return True
+            return "updated"
         except OfficialClientError as exc:
-            logger.warning("Could not mark first PDF progress as READING: %s", type(exc).__name__)
-            return False
+            logger.warning("Could not mark first reading position as READING: %s", type(exc).__name__)
+            return "failed"
 
     @staticmethod
     def _timestamp_conflict(

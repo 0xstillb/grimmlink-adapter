@@ -78,6 +78,8 @@ class IngestionPreview(BaseModel):
     book_target: Path
     book_id: int
     fields_to_update: list[str]
+    metadata_before: dict[str, Any] = Field(default_factory=dict)
+    metadata_after: dict[str, Any] = Field(default_factory=dict)
     fields_skipped: list[str] = Field(default_factory=list)
     locked_fields: list[str] = Field(default_factory=list)
     cover_source: Path | None = None

@@ -50,8 +50,7 @@ def discover_opf(source: Path, root: Path | None = None) -> Path:
     stem = source.stem if source.is_file() else None
     candidates: list[Path] = []
     if stem:
-        candidates.extend(sorted(directory.glob(f"{stem}.opf")))
-        candidates.extend(sorted(directory.glob(f"{stem}.OPF")))
+        candidates.extend(sorted(path for path in directory.iterdir() if path.is_file() and path.stem == stem and path.suffix.lower() == ".opf"))
     metadata = directory / "metadata.opf"
     if metadata.exists():
         candidates.append(metadata)
@@ -65,12 +64,11 @@ def discover_opf(source: Path, root: Path | None = None) -> Path:
     return unique[0]
 
 
-def parse_opf(opf_path: Path, root: Path | None = None) -> OPFDocument:
+def parse_opf(opf_path: Path, root: Path | None = None, *, data: bytes | None = None) -> OPFDocument:
     """Parse Dublin Core and common Calibre metadata into canonical fields."""
     opf_path = _contained(opf_path, (root or opf_path.parent).resolve())
     try:
-        tree = ET.parse(opf_path)
-        root_element = tree.getroot()
+        root_element = ET.parse(opf_path).getroot() if data is None else ET.fromstring(data)
     except (ET.ParseError, OSError) as exc:
         raise MalformedOPFError(f"Unable to parse OPF: {opf_path.name}") from exc
 

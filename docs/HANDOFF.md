@@ -1,5 +1,15 @@
 # Inter-Session Handoff & Governance
 
+## V2 metadata automation handoff — 2026-11-07
+
+- Implemented multi-library Auto + independent Manual runs in the V2 worktree. The Adapter uses the Grimmory Library/BrowsePage contract to find book files, maps them to the Pi4 NAS bind mount, checks a NAS marker, and uses verified hash/file identity before any metadata write.
+- Migration 012 persists policies, queue, write intent, verified field baselines, and activity. The single worker resumes after restart and yields between libraries every twenty books. Run account credentials and linked-account tokens use an encrypted local key; preserve the key and SQLite together.
+- The existing Metadata page has library mapping, background account enrollment, manual runs while Auto is enabled, preview/backfill, stop, per-field conflict resolution, and activity. Diagnostics exports aggregate queue information. Auto consumes OPF/JSON sidecars and writes metadata through the API; output-sidecar fallback remains on the existing per-file workflow, with covers pending when upstream cannot apply them safely.
+- Setup and limitations: [Auto/Manual design](OPF_SIDECAR_AUTOMATION_DESIGN.md) and [README](../README.md). Deployment and E2E checks with the user's Pi4, NAS, Grimmory settings, and account remain open. No production metadata writes, deployment, commit, or push were performed.
+- Verification: 109 affected mock/local regression tests passed; Ruff, mypy, inline JavaScript syntax, and `git diff --check` passed. Browser interaction was not verified in this session.
+
+The remainder of this handoff records the earlier adapter sessions.
+
 - **Current Session:** Session 08 — Reading-session adapter
 - **Implementer:** Gemini implementation followed by Sol gate fixes; unmerged working tree
 - **Current Lifecycle State:** Session 08 gate findings addressed in working tree; verification complete, no merge yet

@@ -1,5 +1,7 @@
 # Official Grimmory API Parity Audit สำหรับ GrimmLink
 
+> **Historical baseline (2026-09-25).** This audit describes the earlier Adapter/client state and is superseded for the v2 contract by [`docs/ADAPTER_V2_SPEC.md`](../docs/ADAPTER_V2_SPEC.md). Its `/api/v1/app/**` findings are risk context, not the current Adapter route map or deployed-server verification.
+
 **วันที่ audit:** 2026-09-25 (Asia/Bangkok)  
 **ขอบเขต:** read-only source/API audit — ไม่เรียก API ที่เปลี่ยนข้อมูล และไม่แก้ source, config, DB หรือ container  
 **เป้าหมาย:** ตรวจว่า GrimmLink ย้ายจาก Grimmory fork ไปใช้ Official Grimmory API ได้หรือไม่ โดยให้ Shelf Sync เป็น priority สูงสุด

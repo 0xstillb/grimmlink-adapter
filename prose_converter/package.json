@@ -1,0 +1,13 @@
+{
+  "name": "grimmlink-prose-converter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node worker.test.mjs"
+  },
+  "dependencies": {
+    "@prose-reader/koreader": "40.0.0",
+    "jsdom": "^26.1.0",
+    "jszip": "^3.10.1"
+  }
+}
