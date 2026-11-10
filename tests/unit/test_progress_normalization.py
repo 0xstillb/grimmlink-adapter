@@ -102,7 +102,7 @@ async def test_progress_put_converts_percent_to_official_fraction() -> None:
     client = AsyncMock()
     client.get_koreader_progress.return_value = {}
     client.update_koreader_progress.return_value = {}
-    client.get_book_by_id.return_value = {"readStatus": "UNREAD"}
+    client.get_book_by_id.side_effect = [{"readStatus": "UNREAD"}, {"readStatus": "READING"}]
     client.update_read_status.return_value = []
     with patch.object(
         ProgressService,
@@ -129,7 +129,7 @@ async def test_md5_pdf_without_book_id_uses_native_route_without_bearer_projecti
     client = AsyncMock()
     client.update_koreader_progress.return_value = {"status": "progress updated"}
     client.update_book_progress.return_value = {}
-    client.get_book_by_id.return_value = {"readStatus": "UNREAD"}
+    client.get_book_by_id.side_effect = [{"readStatus": "UNREAD"}, {"readStatus": "READING"}]
     service = ProgressService(client)
     with patch.object(
         ProgressService,
@@ -266,6 +266,7 @@ async def test_bearer_progress_update_writes_pdf_projection() -> None:
     client.get_book_by_id.side_effect = [
         {"pdfProgress": {"page": 0, "percentage": 0.0}},
         {"readStatus": "UNREAD"},
+        {"readStatus": "READING"},
     ]
     service = ProgressService(client)
     with patch.object(
@@ -289,6 +290,48 @@ async def test_bearer_progress_update_writes_pdf_projection() -> None:
             "bookFileId": 101, "positionData": "55", "progressPercent": 22.0,
         }}, "verified-bearer",
     )
+
+
+@pytest.mark.asyncio
+async def test_three_pages_of_long_pdf_mark_reading_below_upstream_percent_threshold() -> None:
+    client = AsyncMock()
+    client.update_book_progress.return_value = {}
+    client.get_book_by_id.side_effect = [
+        {"pdfProgress": {"page": 0, "percentage": 0.0}, "readStatus": "UNREAD"},
+        {"readStatus": "UNREAD"},
+        {"readStatus": "READING"},
+    ]
+    with patch.object(
+        ProgressService,
+        "_resolve_bearer_book",
+        new=AsyncMock(return_value=("verified-bearer", 42, 101, "PDF")),
+    ), patch(
+        "grimmlink_adapter.services.progress_service.get_official_bearer",
+        new=AsyncMock(return_value=VerifiedBearer("jwt-token", 7)),
+    ):
+        result = await ProgressService(client).update_progress(
+            KoreaderProgressPayload(
+                bookHash="pdf-very-long", bookId=42, bookFileId=101, fileFormat="PDF",
+                progress="3", currentPage=3, totalPages=10000, timestamp=100,
+            ),
+            BEARER_CREDS,
+        )
+    client.update_book_progress.assert_awaited_once_with(
+        42, {"fileProgress": {
+            "bookFileId": 101, "positionData": "3", "progressPercent": 0.03,
+        }}, "verified-bearer",
+    )
+    client.update_read_status.assert_awaited_once_with(42, "READING", "verified-bearer")
+    assert result["readStatus"] == {"status": "updated", "value": "READING", "source": "position"}
+
+
+@pytest.mark.asyncio
+async def test_reading_status_requires_upstream_readback() -> None:
+    client = AsyncMock()
+    client.get_book_by_id.side_effect = [{"readStatus": "UNREAD"}, {"readStatus": "UNREAD"}]
+    result = await ProgressService(client)._mark_reading_if_started(42, "verified-bearer", True)
+    assert result == "failed"
+    client.update_read_status.assert_awaited_once_with(42, "READING", "verified-bearer")
 
 
 @pytest.mark.asyncio

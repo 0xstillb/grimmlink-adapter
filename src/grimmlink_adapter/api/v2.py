@@ -8,11 +8,18 @@ from typing import Any, cast
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 
-from grimmlink_adapter.api.books import download_book, get_book_by_hash
+from grimmlink_adapter.api.books import (
+    download_book,
+    get_book_by_hash,
+    get_supported_read_statuses,
+    update_read_status,
+)
 from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.automation import LibraryPolicy
 from grimmlink_adapter.models.grimmlink import (
     GrimmlinkBookSummary,
+    GrimmlinkReadStatusRequest,
+    GrimmlinkReadStatusResponse,
     GrimmlinkShelfSummary,
     KoreaderProgressPayload,
 )
@@ -26,6 +33,10 @@ from grimmlink_adapter.models.v2 import (
 )
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import OfficialAuthError, OfficialClientError
+from grimmlink_adapter.official.identity_lookup import (
+    GrimmoryIdentityLookup,
+    GrimmoryIdentityLookupError,
+)
 from grimmlink_adapter.security.auth_extractor import (
     ClientCredentials,
     get_adapter_session,
@@ -150,6 +161,33 @@ async def get_content(
     if resolved_id != book_id:
         raise HTTPException(status_code=409, detail="Book ID does not match the verified content hash.")
     return await download_book(book_id, creds)
+
+
+@router.get("/books/{book_id}/hash")
+async def get_primary_file_hash(
+    book_id: int,
+    creds: ClientCredentials = Depends(require_v2_credentials),
+) -> dict[str, object]:
+    bearer = await get_official_bearer(creds)
+    async with OfficialGrimmoryClient() as client:
+        book = await client.get_book_by_id(book_id, bearer)
+    if not isinstance(book, dict) or book.get("id") != book_id:
+        raise HTTPException(status_code=502, detail="Grimmory returned a different book identity.")
+    primary = book.get("primaryFile")
+    file_id = primary.get("id") if isinstance(primary, dict) else None
+    if not isinstance(file_id, int) or isinstance(file_id, bool) or file_id <= 0:
+        raise HTTPException(status_code=404, detail="Book has no primary file.")
+    lookup = GrimmoryIdentityLookup()
+    if not lookup.enabled:
+        raise HTTPException(status_code=501, detail="Read-only hash lookup is not configured.")
+    try:
+        candidates = await lookup.lookup_file_id(file_id)
+    except GrimmoryIdentityLookupError as exc:
+        raise HTTPException(status_code=502, detail="Read-only hash lookup failed.") from exc
+    matching = [row for row in candidates if row.book_id == book_id and row.current_hash]
+    if len(matching) != 1:
+        raise HTTPException(status_code=409, detail="Primary file hash could not be verified.")
+    return {"bookId": book_id, "bookFileId": file_id, "bookHash": matching[0].current_hash}
 
 
 @router.get("/shelves")
@@ -313,8 +351,13 @@ async def put_v2_progress(
             if not position.xpointer:
                 raise HTTPException(status_code=422, detail="KOReader EPUB progress requires an XPointer.")
             cfi = await prose_converter.convert(book_hash, "xpointer", position.xpointer, creds)
+            if not cfi:
+                raise HTTPException(
+                    status_code=424,
+                    detail="Verified EPUB CFI conversion is required for Grimmory progress and Continue Reading.",
+                )
             position = position.model_copy(update={"cfi": cfi})
-            conversion = "synced" if cfi else "failed"
+            conversion = "synced"
         else:
             if not position.cfi:
                 raise HTTPException(status_code=422, detail="Readest EPUB progress requires a CFI.")
@@ -367,6 +410,11 @@ async def put_v2_progress(
             "value": None,
             "source": "manual-status" if result.get("conflictDetected") else "position",
         }
+    if read_status.get("status") == "failed":
+        raise HTTPException(
+            status_code=502,
+            detail="Progress was saved, but Grimmory reading status could not be confirmed. Retry the same position.",
+        )
     return {
         **result,
         "operationId": str(request.operationId),
@@ -382,6 +430,22 @@ async def put_v2_progress(
         },
         "readStatus": read_status,
     }
+
+
+@router.get("/books/read-statuses")
+async def v2_read_statuses(
+    creds: ClientCredentials = Depends(require_v2_credentials),
+) -> dict[str, list[str]]:
+    return await get_supported_read_statuses(creds)
+
+
+@router.put("/books/{book_id}/status", response_model=GrimmlinkReadStatusResponse)
+async def v2_update_read_status(
+    book_id: int,
+    request: GrimmlinkReadStatusRequest,
+    creds: ClientCredentials = Depends(require_v2_credentials),
+) -> GrimmlinkReadStatusResponse:
+    return await update_read_status(book_id, request, creds)
 
 
 @router.get("/books/{book_id}/metadata")

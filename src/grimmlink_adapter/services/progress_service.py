@@ -815,7 +815,14 @@ class ProgressService:
             if current.get("readStatus") != "UNREAD":
                 return "unchanged"
             await self.official_client.update_read_status(book_id, "READING", bearer)
-            return "updated"
+            confirmed = await self.official_client.get_book_by_id(book_id, bearer)
+            if isinstance(confirmed, dict) and confirmed.get("readStatus") == "READING":
+                return "updated"
+            if isinstance(confirmed, dict) and confirmed.get("readStatus") in {
+                "RE_READING", "READ", "PARTIALLY_READ", "PAUSED", "WONT_READ", "ABANDONED",
+            }:
+                return "unchanged"
+            return "failed"
         except OfficialClientError as exc:
             logger.warning("Could not mark first reading position as READING: %s", type(exc).__name__)
             return "failed"

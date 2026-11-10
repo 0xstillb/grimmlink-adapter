@@ -58,6 +58,9 @@ WHERE bf.initial_hash = %s
 """
 
 
+_FILE_ID_QUERY = _CURRENT_HASH_QUERY.replace("bf.current_hash = %s", "bf.id = %s")
+
+
 class GrimmoryIdentityLookup:
     """Query exact hashes using a dedicated, externally provisioned read-only DB user.
 
@@ -79,6 +82,10 @@ class GrimmoryIdentityLookup:
     async def lookup_initial_hash(self, book_hash: str) -> list[GrimmoryIdentityCandidate]:
         """Return every active book row matching initial_hash exactly."""
         return await self._query(_INITIAL_HASH_QUERY, book_hash)
+
+    async def lookup_file_id(self, file_id: int) -> list[GrimmoryIdentityCandidate]:
+        """Return the active primary file identity for a verified book file ID."""
+        return await self._query(_FILE_ID_QUERY, file_id)
 
     async def diagnose(self) -> dict[str, object]:
         """Verify credentials and SELECT access to the exact schema used for hash resolution."""
@@ -168,7 +175,7 @@ class GrimmoryIdentityLookup:
             if connection is not None:
                 connection.close()
 
-    async def _query(self, query: str, book_hash: str) -> list[GrimmoryIdentityCandidate]:
+    async def _query(self, query: str, book_hash: str | int) -> list[GrimmoryIdentityCandidate]:
         if not self.config.GRIMMORY_DB_ENABLED:
             return []
 
@@ -226,7 +233,7 @@ class GrimmoryIdentityLookup:
     async def _fetch_rows(
         connection: aiomysql.Connection,
         query: str,
-        book_hash: str,
+        book_hash: str | int,
     ) -> list[dict[str, Any]]:
         async with connection.cursor() as cursor:
             await cursor.execute(query, (book_hash,))

@@ -106,6 +106,38 @@ class V2ProseProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(service.written.percentage, 50.0)
         self.assertEqual(result["epubConversion"], "synced")
 
+    async def test_xpointer_push_requires_cfi_for_continue_reading(self):
+        service = FakeService("2026-11-09T12:00:00Z", 1794225000)
+        request = V2ProgressRequest(
+            operationId=uuid4(), source="koreader", updatedAt=datetime(2026, 11, 9, 12, tzinfo=UTC),
+            fraction=0.0003, position=V2ProgressPosition(
+                format="EPUB", xpointer="/body/DocFragment[1]/body/p/text().7", page=3,
+            ),
+        )
+        with patch.object(v2, "_progress_service", service), patch.object(v2, "prose_converter", FakeConverter(None)):
+            with self.assertRaises(HTTPException) as caught:
+                await v2.put_v2_progress("hash", request, self.creds)
+        self.assertEqual(caught.exception.status_code, 424)
+        self.assertIsNone(service.written)
+
+    async def test_status_failure_does_not_claim_complete_v2_sync(self):
+        service = FakeService("2026-11-09T12:00:00Z", 1794225000)
+
+        async def failed_status(payload, creds):
+            service.written = payload
+            return {"status": "progress updated", "projection": "official-book-api", "readStatus": {"status": "failed"}}
+
+        service.update_progress = failed_status
+        request = V2ProgressRequest(
+            operationId=uuid4(), source="readest", updatedAt=datetime(2026, 11, 9, 12, tzinfo=UTC),
+            fraction=0.0003, position=V2ProgressPosition(format="PDF", page=3, totalPages=10000),
+        )
+        with patch.object(v2, "_progress_service", service):
+            with self.assertRaises(HTTPException) as caught:
+                await v2.put_v2_progress("hash", request, self.creds)
+        self.assertEqual(caught.exception.status_code, 502)
+        self.assertIsNotNone(service.written)
+
     async def test_readest_push_replaces_unverified_xpointer(self):
         service = FakeService("2026-11-09T12:00:00Z", 1794225000)
         converter = FakeConverter("/body/DocFragment[1]/body/p/text().8")
