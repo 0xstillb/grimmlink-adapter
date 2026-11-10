@@ -137,6 +137,7 @@ The current Grimmory 3.5.0 API reference documents [progress](https://grimmory.o
 | `DELETE /auth/session` | Revoke the current Adapter token/device session. |
 | `GET /capabilities` | Report negotiated server and client features. |
 | `GET /books/resolve?hash={hash}` | Resolve a verified book and primary file. |
+| `GET /books/{bookId}/hash` | Verify the accessible primary file against the read-only Grimmory identity lookup and return its current hash for a shelf download. Requires the configured identity DB. |
 | `GET /books/{bookId}/content?hash={hash}` | Verify the hash resolves to this book, then stream the content file. |
 | `GET /shelves` | List regular shelves. Magic shelves are not part of the v2 contract. |
 | `GET /shelves/{shelfId}/items` | List regular shelf membership with pagination/cursor. |
@@ -145,6 +146,7 @@ The current Grimmory 3.5.0 API reference documents [progress](https://grimmory.o
 | `GET /progress/{bookHash}?reader={koreader\|readest}` | Return the position projection for the requesting reader. |
 | `PUT /progress/{bookHash}` | Upsert normalized position/status and return native-sync and Readest-persistence results; include Web Reader projection only when that optional capability is enabled. |
 | `POST /reading-sessions` and `/reading-sessions/batch` | Record idempotent reading sessions. |
+| `GET /books/read-statuses` and `PUT /books/{bookId}/status` | List accepted read statuses and update a manual read status through the linked Grimmory account. |
 | `GET/PUT /books/{bookId}/metadata` | Read/update book metadata and read status fields. `PUT` requires an `operationId` UUID for correlation; the server does not deduplicate by this ID. |
 | `GET/POST /syncs/metadata` and `POST /syncs/metadata/batch` | Synchronize supported personal ratings, bookmarks, and annotations through the existing deduplicated metadata service. |
 | `GET /local/metadata` | Serve the Adapter's local metadata management UI. |
@@ -230,10 +232,10 @@ Prose conversion is EPUB-only. PDF/CBZ use page locations. Prose documents limit
 2. `fraction >= 0.995` may mark `READ`; a client may also explicitly mark the book read.
 3. A low fraction alone must not mark a book `UNREAD`. An explicit user status operation is required to set `UNREAD`.
 4. Explicit status has precedence over older queued progress. Compare event timestamps/sequence values before applying automatic transitions.
-5. A new, later reading position can reopen a completed book to `READING`; it must not be blocked by an older manual `READ` event.
+5. A completed `READ` book remains completed during automatic progress sync. Re-reading is an explicit status operation; the Adapter does not silently reopen a completed book.
 6. Keep display percentage separate from status and position. Never fake `1%`, `10%`, or a page location to force Continue Reading.
 
-The Official Book progress endpoint currently derives status from percentage thresholds (`>0.1%` for `READING`, `>=99.5%` for `READ`), while preserving an already engaged status when progress is at or below `0.1%`. The Adapter must still apply its first-position policy through the explicit Official status endpoint when a verified location exists but the percentage rounds to zero. It must then read back status and protect newer manual status from stale sync events. This behavior is a contract test requirement.
+The Official Book progress endpoint currently derives status from percentage thresholds (`>0.1%` for `READING`, `>=99.5%` for `READ`), while preserving an already engaged status when progress is at or below `0.1%`. Three pages in a 10,000-page PDF are only `0.03%`; the Adapter applies its first-position policy through the explicit Official status endpoint without changing the percentage. It reads back the resulting status and protects newer manual status from stale sync events. Grimmory Continue Reading also requires `lastReadTime`, which the Book API progress write supplies. V2 KOReader EPUB pushes therefore require a verified CFI conversion before any progress write; a conversion failure returns `424` for retry. This behavior is a contract test requirement.
 
 ## 8. Local and LAN metadata management UI
 

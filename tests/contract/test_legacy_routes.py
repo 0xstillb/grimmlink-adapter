@@ -130,17 +130,17 @@ async def test_v2_capabilities_do_not_claim_incomplete_hash_lookup(
 
 
 @pytest.mark.asyncio
-async def test_v2_does_not_publish_legacy_aliases_or_magic_shelf_routes(
+async def test_v2_omits_magic_shelf_alias_and_protects_status_route(
     test_client: AsyncClient,
 ) -> None:
     magic_route = await test_client.get("/api/grimmlink/v2/shelves/magic/100/books")
-    legacy_status_route = await test_client.put(
+    v2_status_route = await test_client.put(
         "/api/grimmlink/v2/books/42/status", json={"status": "READING"},
     )
     legacy_v1_route = await test_client.get("/api/grimmlink/v1/shelves/magic/100/books")
 
     assert magic_route.status_code == 404
-    assert legacy_status_route.status_code == 404
+    assert v2_status_route.status_code == 401  # Requires an Adapter session.
     assert legacy_v1_route.status_code == 401
 
 
