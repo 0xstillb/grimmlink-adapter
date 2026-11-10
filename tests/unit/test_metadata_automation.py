@@ -415,7 +415,7 @@ async def test_worker_resumes_staged_books_after_restart(configured_book, monkey
     client.get_library.return_value = library
     monkeypatch.setattr(module, "OfficialGrimmoryClient", lambda: client)
     run_id = await Store.enqueue(server_key(), 9, 1, "check", "manual")
-    await Store.add_book_page(run_id, 0, [{"id": 12, "libraryId": 9}, {"id": 13, "libraryId": 9}])
+    await Store.add_book_page(run_id, 0, [{"id": 12, "libraryId": 9}, {"id": 13, "libraryId": 9, "title": "Missing metadata book"}])
     progress = {"checked": 1, "total": 2, "position": 1, "phase": "processing", "counts": {"no_source": 1}}
     await Store.execute("UPDATE metadata_runs SET result=? WHERE id=?", (json.dumps(progress), run_id))
     await worker.run((await Store.query("SELECT * FROM metadata_runs WHERE id=?", (run_id,)))[0])
@@ -425,6 +425,7 @@ async def test_worker_resumes_staged_books_after_restart(configured_book, monkey
     final = (await Store.query("SELECT state,result FROM metadata_runs WHERE id=?", (run_id,)))[0]
     assert final["state"] == "completed"
     assert json.loads(final["result"])["checked"] == 2
+    assert json.loads(final["result"])["missingMetadata"] == [{"bookId": 13, "title": "Missing metadata book"}]
     assert not await Store.book_batch(run_id, 0, 20)
 
 
@@ -453,6 +454,21 @@ async def test_library_api_never_reveals_other_owners_activity(metadata_db, test
         assert response.status_code == 404
     finally:
         test_client._transport.app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_paginated_library_uses_grimmory_metadata_title():
+    def handle(_request):
+        return httpx.Response(200, json={
+            "content": [{"id": 28, "libraryId": 4, "metadata": {"title": "Real book title"},
+                         "primaryFile": {"id": 29, "filePath": "/books/Book.epub", "fileName": "Book.epub"}}],
+            "page": {"totalElements": 1},
+        })
+
+    async with httpx.AsyncClient(base_url="http://metadata.test", transport=httpx.MockTransport(handle)) as transport:
+        async with OfficialGrimmoryClient(base_url="http://metadata.test", client=transport) as client:
+            books = await client.get_library_books(4, "token")
+    assert books[0]["title"] == "Real book title"
 
 
 @pytest.mark.asyncio

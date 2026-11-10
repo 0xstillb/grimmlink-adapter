@@ -1013,6 +1013,15 @@ class OfficialGrimmoryClient:
                 summary = {key: book[key] for key in ("id", "libraryId", "libraryPath", "title", "addedOn") if key in book}
                 file_keys = ("id", "filePath", "fileName", "folderBased")
                 primary = book.get("primaryFile")
+                metadata = book.get("metadata")
+                title = metadata.get("title") if isinstance(metadata, dict) else None
+                if not isinstance(title, str) or not title.strip():
+                    title = summary.get("title")
+                if (not isinstance(title, str) or not title.strip()) and isinstance(primary, dict):
+                    file_name = primary.get("fileName")
+                    title = file_name.rsplit(".", 1)[0] if isinstance(file_name, str) else None
+                if isinstance(title, str) and title.strip():
+                    summary["title"] = title.strip()[:512]
                 if isinstance(primary, dict):
                     summary["primaryFile"] = {key: primary[key] for key in file_keys if key in primary}
                 alternatives = book.get("alternativeFormats")

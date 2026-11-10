@@ -1044,6 +1044,14 @@
           const counts = run.result.counts || {};
           const outcomes = [["อัปเดตแล้ว", counts.updated], ["ข้อมูลตรงกัน", counts.in_sync], ["ไม่มีไฟล์ Metadata", counts.no_source], ["รอไฟล์นิ่ง", counts.waiting_stable], ["ต้องตรวจสอบ", counts.blocked], ["ผิดพลาด", counts.failed]].filter(([, count]) => count > 0).map(([label, count]) => `${label} ${count}`);
           line.append(node("p", `${phase}${outcomes.length ? " · " + outcomes.join(" · ") : ""}`, "helper"));
+          const missing = run.result.missingMetadata || [];
+          if (missing.length) {
+            const missingList = node("div", "", "run-missing");
+            missingList.append(node("p", "เล่มที่ไม่มี OPF/sidecar:", "helper"));
+            for (const book of missing) missingList.append(node("p", `• ${book.title || "ไม่พบชื่อเล่ม"} · #${book.bookId}`, "helper"));
+            if (counts.no_source > missing.length) missingList.append(node("p", `และอีก ${counts.no_source - missing.length} เล่ม · ดูผลรายหนังสือด้านล่าง`, "helper"));
+            line.append(missingList);
+          }
         }
         line.append(node("p", `อัปเดตล่าสุด ${new Date(run.updated_at * 1000).toLocaleString("th-TH")}`, "helper"));
         if (run.result.reason) line.append(node("p", reasonLabels[run.result.reason] || run.result.reason, "feedback"));

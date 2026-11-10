@@ -432,6 +432,8 @@ class MetadataAutomation:
                     result["checked"] += 1
                     result["position"] += 1
                     result["counts"][state] = result["counts"].get(state, 0) + 1
+                    if state == "no_source" and len(result.setdefault("missingMetadata", [])) < 5:
+                        result["missingMetadata"].append({"bookId": book["id"], "title": book.get("title")})
                     if run["requested_by"] != "auto":
                         await self.progress(run["id"], result)
                     if run["requested_by"] == "auto" and self.wake.is_set() and result["position"] < result["total"]:
