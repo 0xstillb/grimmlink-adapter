@@ -6,6 +6,8 @@
 
 สิ่งที่ทำแล้ว: per-library policies, NAS root/marker mapping, Auto + Manual runs, SQLite queue พร้อมกู้หลัง restart, คิวสลับ Library ทุก 20 เล่ม, per-field conflict/lock policy, readback/intent recovery, encrypted account binding, activity และ diagnostics ใน UI
 
+ค่าเริ่มต้นของ source policy คือเลือก OPF หนึ่งไฟล์ก่อน และใช้ JSON sidecar ตัวแรกเมื่อไม่พบหรือ parse OPF ไม่ได้; cover ที่อ้างถึงแต่ไม่มีไฟล์จะถูกละไว้โดย metadata ที่เหลือยังนำเข้าได้ ส่วน path ที่ออกนอก root ยังคงถูกปฏิเสธ
+
 ขอบเขต implementation ปัจจุบัน: source discovery ทำร่วมกับแต่ละรอบ poll แทน watcher แยก; ตรวจค่าฝั่ง Grimmory ซ้ำอย่างน้อยทุก 30 นาทีสำหรับ source ที่ไม่เปลี่ยน; source ที่เพิ่งพบรอให้ไฟล์นิ่งก่อนเริ่ม; Auto ใช้ API-only และปกยัง pending; output-sidecar delivery และ event-trigger จาก upstream เป็นส่วนขยายที่ยังไม่ได้เปิดใช้ รายละเอียดด้านล่างบอกทั้งกติกาหลักและส่วนขยายดังกล่าว
 
 ก่อนงานนี้มี parser, hash identity lookup, metadata API client, ingestion state และหน้า manual preview/apply อยู่แล้ว งาน Auto และ Manual run ใช้ parser, การยืนยันตัวตนของไฟล์, การตรวจ settings และ API เดิม ร่วมกับตัววางแผนและคิวที่เพิ่มในรอบนี้ ส่วน manual รายไฟล์เดิมใช้ตัวกันเขียนพร้อมกันร่วมกับ worker

@@ -35,7 +35,7 @@ class LibraryPolicy(BaseModel):
     autoEnabled: bool = False
     intervalSeconds: int = Field(default=300, ge=60, le=86400)
     settleSeconds: int = Field(default=30, ge=10, le=3600)
-    sourcePreference: Literal["review", "opf", "json"] = "review"
+    sourcePreference: Literal["review", "opf", "json"] = "opf"
     fields: list[str] = Field(default_factory=lambda: list(METADATA_FIELDS))
     mappings: list[LibraryMapping] = Field(min_length=1, max_length=32)
 

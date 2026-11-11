@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grimmlink-adapter"
-version = "0.1.14"
+version = "0.1.18"
 description = "Standalone adapter bridging KOReader GrimmLink to stock Official Grimmory"
 readme = "README.md"
 requires-python = ">=3.12"

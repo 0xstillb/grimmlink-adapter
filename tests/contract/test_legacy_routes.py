@@ -419,6 +419,70 @@ async def test_book_hash_cache_is_not_exposed_before_access_checks(
 
 
 @pytest.mark.asyncio
+async def test_v2_book_metadata_includes_read_status_timestamp(
+    test_client: AsyncClient,
+) -> None:
+    app = test_client._transport.app
+    app.dependency_overrides[require_v2_credentials] = lambda: ClientCredentials(bearer_token="token")
+    with patch(
+        "grimmlink_adapter.api.v2.get_official_bearer",
+        new=AsyncMock(return_value="verified-bearer"),
+    ), patch(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.get_book_by_id",
+        new=AsyncMock(
+            return_value={
+                "metadata": {"title": "Book"},
+                "readStatus": "READ",
+                "readStatusModifiedTime": "2026-11-10T08:00:00Z",
+            }
+        ),
+    ), patch(
+        "grimmlink_adapter.api.v2.ProgressStateCache.get_manual_status_for_book",
+        new=AsyncMock(return_value=None),
+    ):
+        resp = await test_client.get(
+            "/api/grimmlink/v2/books/42/metadata",
+            headers=AUTH_HEADERS,
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "bookId": 42,
+        "metadata": {"title": "Book"},
+        "readStatus": "READ",
+        "readStatusModifiedTime": "2026-11-10T08:00:00Z",
+    }
+
+
+@pytest.mark.asyncio
+async def test_v2_book_metadata_uses_cached_adapter_status_timestamp(
+    test_client: AsyncClient,
+) -> None:
+    app = test_client._transport.app
+    app.dependency_overrides[require_v2_credentials] = lambda: ClientCredentials(bearer_token="token")
+    with patch(
+        "grimmlink_adapter.api.v2.get_official_bearer",
+        new=AsyncMock(return_value="verified-bearer"),
+    ), patch(
+        "grimmlink_adapter.official.client.OfficialGrimmoryClient.get_book_by_id",
+        new=AsyncMock(return_value={"metadata": {"title": "Book"}, "readStatus": "READ"}),
+    ), patch(
+        "grimmlink_adapter.api.v2.ProgressStateCache.get_manual_status_for_book",
+        new=AsyncMock(return_value={"status": "READ", "updatedAt": 1794297600}),
+    ):
+        resp = await test_client.get(
+            "/api/grimmlink/v2/books/42/metadata",
+            headers=AUTH_HEADERS,
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "bookId": 42,
+        "metadata": {"title": "Book"},
+        "readStatus": "READ",
+        "readStatusModifiedTime": "2026-11-10T08:00:00Z",
+    }
+
+
+@pytest.mark.asyncio
 async def test_read_status_does_not_report_unperformed_update(
     test_client: AsyncClient,
 ) -> None:

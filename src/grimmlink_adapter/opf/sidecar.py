@@ -45,10 +45,16 @@ def parse_metadata_sidecar(
     cover_path: Path | None = None
     cover = payload.get("cover")
     if isinstance(cover, dict) and isinstance(cover.get("path"), str):
-        candidate = (source.parent / cover["path"]).resolve(strict=True)
-        if not candidate.is_file() or not candidate.is_relative_to(root_path):
+        candidate = (source.parent / cover["path"]).resolve(strict=False)
+        if not candidate.is_relative_to(root_path):
             raise InvalidMetadataSidecarError("Metadata sidecar cover path is outside the configured root")
-        cover_path = candidate
+        # Cover art is optional. A stale/missing cover reference must not make
+        # otherwise valid metadata unusable; keep rejecting escapes and
+        # existing non-file targets.
+        if candidate.exists():
+            if not candidate.is_file():
+                raise InvalidMetadataSidecarError("Metadata sidecar cover path is not a file")
+            cover_path = candidate
     return OPFDocument(
         source_path=source,
         metadata=metadata,

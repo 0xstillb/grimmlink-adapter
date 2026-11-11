@@ -23,12 +23,14 @@ class FakeService:
         return KoreaderProgressPayload(
             document=book_hash, fileFormat="EPUB", cfi="epubcfi(/6/2[chapter]!/4/2/1:3)",
             percentage=20, updatedAt=self.book_time,
+            device="Readest Desktop", device_id="readest-device-1",
         )
 
     async def get_native_progress(self, book_hash, creds):
         return {
             "document": book_hash, "progress": "/body/DocFragment[1]/body/p/text().7",
             "percentage": 0.5, "timestamp": self.native_time,
+            "device": "Readest Desktop", "device_id": "readest-device-1",
         }
 
     async def update_progress(self, payload, creds):
@@ -67,6 +69,8 @@ class V2ProseProgressTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(v2, "_progress_service", service), patch.object(v2, "prose_converter", converter):
             result = await v2.get_v2_progress("hash", "koreader", self.creds)
         self.assertEqual(result["source"], "book-api")
+        self.assertEqual(result["device"], "Readest Desktop")
+        self.assertEqual(result["deviceId"], "readest-device-1")
         self.assertEqual(result["position"]["xpointer"], converter.result)
         self.assertEqual(result["fraction"], 0.2)
         self.assertEqual(converter.calls[0][0], "cfi")
@@ -79,6 +83,8 @@ class V2ProseProgressTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["source"], "koreader-native")
         self.assertEqual(result["position"]["cfi"], converter.result)
         self.assertEqual(result["fraction"], 0.5)
+        self.assertEqual(result["device"], "Readest Desktop")
+        self.assertEqual(result["deviceId"], "readest-device-1")
 
     async def test_conversion_failure_does_not_return_stale_page(self):
         service = FakeService("2026-11-09T12:00:00Z", 1794225000)

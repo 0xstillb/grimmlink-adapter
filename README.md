@@ -20,9 +20,14 @@ by default and requires a dedicated SELECT-only DB account on a restricted
 network. It never writes to Grimmory's database. See `sessions/03_BOOK_IDENTITY.md`
 and `docs/HANDOFF.md`.
 
-For a legacy MD5-only client, link each Grimmory user locally once after the
-Adapter is configured. Run this with the same `GRIMMORY_BASE_URL` and
-`SQLITE_DB_PATH` used by the Adapter:
+For a legacy MD5-only client, no command is needed when the KOReader username
+matches the account already bound in the Metadata setup. On its first
+authenticated request, the Adapter verifies the KOReader key with Grimmory,
+checks the bound account's JWT profile has the exact same username, and creates
+the encrypted Reader link automatically. Reader and Metadata then share one
+refresh-token chain. If the KOReader user is different from the bound Metadata
+user, link that separate account once with the command below, using the same
+`GRIMMORY_BASE_URL` and `SQLITE_DB_PATH` as the Adapter:
 
 ```text
 uv run --no-sync python -m grimmlink_adapter.link_account <username>
@@ -94,9 +99,13 @@ Fallback = Official-compatible Sidecar JSON
 
 ## V2 local metadata UI and LAN access
 
-The Adapter serves its Setup, Diagnostics, and OPF/sidecar review UI at `/api/grimmlink/v2/local/metadata` (the root URL redirects there). The login form can load without a session; metadata, diagnostics, and setup API actions require signing in with the normal Grimmory website account. The UI bearer token lives in that browser tab's `sessionStorage`, so opening the UI in a different tab, browser, or device requires signing in again. A bound background Metadata account keeps its server-side work running but never grants another browser access to the UI. Readest and KOReader enter their KOSync credentials in the reader apps; the Adapter UI does not ask for those credentials. Configure `METADATA_IMPORT_ROOTS` as a JSON array of directories visible to the Adapter, for example `METADATA_IMPORT_ROOTS=["/imports"]`. For each Grimmory Library path, select that NAS root and browse its folders in the UI, for example `Books/MANGA_NC` for `/imports/Books/MANGA_NC` (select the root itself when appropriate). The marker remains relative to the NAS root. Manual scanning lists files only in the selected Library's mapped subfolders; preview is read-only and apply is explicit. The manual import button wakes and prioritizes a run independently of the Auto interval. Existing Library policies need this one-time subfolder setting before Auto or manual import resumes.
+The Adapter serves its Setup, Diagnostics, and OPF/sidecar review UI at `/api/grimmlink/v2/local/metadata` (the root URL redirects there). Once a background Metadata account is bound, the UI creates a short-lived, Metadata-only session from that account automatically. No Grimmory login is needed on normal visits, including from another tab or device on the trusted home LAN/Tailscale network. The login form appears only when the background account needs its initial setup or reconnect. UI sessions cannot call reader API routes. Readest and KOReader continue to authenticate through their own KOSync credentials. Configure `METADATA_IMPORT_ROOTS` as a JSON array of directories visible to the Adapter, for example `METADATA_IMPORT_ROOTS=["/imports"]`. For each Grimmory Library path, select that NAS root and browse its folders in the UI, for example `Books/MANGA_NC` for `/imports/Books/MANGA_NC` (select the root itself when appropriate). The marker remains relative to the NAS root. Manual scanning lists files only in the selected Library's mapped subfolders; preview is read-only and apply is explicit. The manual import button wakes and prioritizes a run independently of the Auto interval. Existing Library policies need this one-time subfolder setting before Auto or manual import resumes.
 
 Use **Setup** to generate the `GRIMMORY_DB_*` environment snippet for a dedicated SELECT-only MariaDB account. The browser copies the snippet locally; it does not submit or store the database password. Paste it into the Adapter's private `.env`, restart the Adapter, then use **Diagnostics → Run diagnostics** to verify the Grimmory API, Adapter SQLite, hash lookup query permissions, metadata roots, and mDNS. The downloaded JSON report contains no passwords or tokens. To produce the same system report from a terminal/container, run `uv run python -m grimmlink_adapter.diagnostics` from the Adapter project directory.
+
+`GET /healthcheck` is a local liveness probe and remains successful when Grimmory is unavailable. `GET /readyz` is a separate read-only readiness probe: it returns `200` when the Official Grimmory health endpoint responds and `503` while Grimmory is unavailable. Keep Docker's restart healthcheck on `/healthcheck`; use `/readyz` for startup ordering and operator readiness checks so an upstream outage does not trigger an Adapter restart loop.
+
+Auto/Manual metadata runs remain in the persistent queue when Grimmory has a transient transport/timeout failure and retry with bounded exponential backoff (30 seconds up to 15 minutes). Other reader writes are not blindly replayed; their recovery follows the operation-specific idempotency and reconciliation behavior documented in the E2E checklist.
 
 The KOReader GrimmLink plugin uses V2 bearer sessions. Regular shelf downloads call `GET /api/grimmlink/v2/books/{bookId}/hash` when a shelf entry lacks a hash, then request content with that verified hash. This requires the SELECT-only Grimmory identity database configured in Setup. The plugin's read-status controls use V2 `GET /books/read-statuses` and `PUT /books/{bookId}/status`. Magic Shelf sync is currently unsupported in V2.
 
@@ -126,7 +135,7 @@ The durable worker waits for stable files, verifies exact book/file identity, pl
 
 New Library policies default to a 300-second Auto interval. The worker stages catalog pages in SQLite and loads twenty books at a time for processing. It fetches full book details only when it needs to verify a metadata source. Manual imports persist progress after each book; the Activity page shows the checked/total percentage, outcome counts, and retry state while polling job summaries. A percentage measures books checked in the current pass, not successful metadata writes. The page loads a book's field differences when opened.
 
-Auto metadata uses the supported metadata API, with no output-sidecar writes. Existing manual file ingestion retains its sidecar fallback. Auto ignores sidecars marked as Adapter-generated to avoid loops. Metadata and cover outcomes are separate: covers remain pending when no safe upload path is available. Multiple conflicting sources require resolving the preference/configuration; per-field Grimmory/source conflicts can be resolved from activity details.
+Auto metadata uses the supported metadata API, with no output-sidecar writes. Source selection defaults to one adjacent OPF; if it is absent or malformed, the first JSON sidecar is used. A missing optional cover file does not invalidate otherwise readable sidecar metadata. Auto ignores sidecars marked as Adapter-generated to avoid loops. Metadata and cover outcomes are separate: covers remain pending when no safe upload path is available. Per-field Grimmory/source conflicts can be resolved from activity details.
 
 Background credentials and newly stored linked-account access/refresh tokens are encrypted. Startup upgrades legacy plaintext linked tokens. Persist and back up the encryption key **with the SQLite database**, and keep both private. By default the key is next to SQLite with suffix `.metadata.key`; `METADATA_KEY_FILE` overrides it. Losing the key requires relinking accounts. Use one worker/replica. Activity exposes current per-book details and recent history; Diagnostics exports queue counts and safe reason codes without metadata values or credentials.
 

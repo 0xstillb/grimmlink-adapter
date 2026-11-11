@@ -156,7 +156,8 @@ async def test_auth_service_rejects_missing_identity_and_forbidden(
     )
     with pytest.raises(HTTPException) as exc:
         await service.authorize_client(creds)
-    assert exc.value.status_code == (502 if upstream_status == 200 else 401)
+    expected = 401 if upstream_status == 403 else 501 if credential == "md5" else 502
+    assert exc.value.status_code == expected
 
 
 @pytest.mark.asyncio
@@ -226,6 +227,69 @@ async def test_auth_service_uses_linked_identity_for_stock_koreader_response(
         ClientCredentials(username="reader", md5_key="md5"),
     )
     assert result.userId == 17
+
+
+@pytest.mark.asyncio
+async def test_auth_service_auto_links_stock_koreader_response_to_metadata_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from grimmlink_adapter.services.metadata_automation import metadata_automation
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"username": "reader"})
+
+    monkeypatch.setattr(
+        "grimmlink_adapter.state.linked_accounts.LinkedAccountStore.get_by_credentials",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "grimmlink_adapter.config.settings.GRIMMORY_BASE_URL",
+        "http://mock",
+    )
+    monkeypatch.setattr(metadata_automation, "link_reader_account", AsyncMock(return_value=17))
+    transport = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    service = AuthService(OfficialGrimmoryClient(client=transport))
+
+    result = await service.authorize_client(
+        ClientCredentials(username="reader", md5_key="md5"),
+    )
+
+    assert result.userId == 17
+    metadata_automation.link_reader_account.assert_awaited_once_with("reader", "md5")
+
+
+@pytest.mark.asyncio
+async def test_auth_service_reports_missing_adapter_account_mapping_without_proxy_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import AsyncMock
+
+    from fastapi import HTTPException
+
+    from grimmlink_adapter.services.metadata_automation import metadata_automation
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"username": "reader"})
+
+    monkeypatch.setattr(
+        "grimmlink_adapter.state.linked_accounts.LinkedAccountStore.get_by_credentials",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "grimmlink_adapter.config.settings.GRIMMORY_BASE_URL",
+        "http://mock",
+    )
+    monkeypatch.setattr(metadata_automation, "link_reader_account", AsyncMock(return_value=None))
+    transport = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://mock")
+    service = AuthService(OfficialGrimmoryClient(client=transport))
+
+    with pytest.raises(HTTPException) as exc:
+        await service.authorize_client(ClientCredentials(username="reader", md5_key="md5"))
+
+    assert exc.value.status_code == 501
+    assert "Bind this same username" in exc.value.detail
 
 
 def test_public_request_rejects_none_mode_for_protected_path() -> None:

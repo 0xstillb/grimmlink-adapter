@@ -158,7 +158,7 @@ The current Grimmory 3.5.0 API reference documents [progress](https://grimmory.o
 
 Adapter session tokens expire after eight hours and are stored in process memory. An Adapter restart revokes existing sessions. Run one worker/replica; multi-worker or multi-replica deployment requires a shared session store first.
 
-The Localhost/LAN management UI signs in with the ordinary Grimmory web account through `POST /local/auth/session`. Its Adapter session keeps the Official access/refresh credentials in memory. The operator explicitly connects the background metadata account, which stores its refresh credential encrypted. Reader sessions still use KOSync credentials supplied by Readest or KOReader to `POST /auth/session`; the management UI never asks for KOSync credentials.
+The Localhost/LAN management UI signs in with the ordinary Grimmory web account through `POST /local/auth/session`. Its Adapter session keeps the Official access/refresh credentials in memory. The operator explicitly connects the background metadata account, which stores its refresh credential encrypted. Reader sessions use KOSync credentials supplied by Readest or KOReader to `POST /auth/session`. On first Reader authentication, if Grimmory verifies the KOReader key and its username exactly matches the already-bound Metadata account, the Adapter validates that account's JWT profile and creates the encrypted Reader link automatically. This avoids a separate CLI step while preserving the same-user check. A different Reader account must first be connected as the background account or explicitly linked.
 
 ### Setup and diagnostics UI
 
@@ -204,6 +204,8 @@ Progress response separates the writes:
 ```
 
 Allowed projection states are `synced`, `skipped`, `failed`, and `unsupported`. Native KOReader success must not imply Readest or optional Web Reader projection success.
+
+The progress GET response also echoes `device` and `deviceId` from the selected snapshot when available. Clients use `deviceId` to recognize their own acknowledged writes and avoid presenting them again as cross-device conflicts. `source` identifies the projection path (`book-api` or `koreader-native`); it is not a device identity.
 
 ## 6. Progress, CFI, and Prose integration
 

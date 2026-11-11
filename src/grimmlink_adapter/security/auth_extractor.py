@@ -3,7 +3,7 @@
 import time
 from dataclasses import dataclass
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSessionStore
 
@@ -144,10 +144,13 @@ async def require_client_credentials(
 
 
 async def require_v2_credentials(
+    request: Request,
     session: tuple[str, AdapterSession] = Depends(get_adapter_session),
 ) -> ClientCredentials:
     """Require an Adapter-issued session and resolve its linked Grimmory bearer."""
     token, adapter_session = session
+    if adapter_session.scope == "metadata_ui" and not request.url.path.startswith("/api/grimmlink/v2/local/"):
+        raise HTTPException(status_code=403, detail="Metadata UI session cannot access reader API routes.")
     if adapter_session.official_access_token:
         return await _official_session_credentials(token, adapter_session)
     session_creds = ClientCredentials(

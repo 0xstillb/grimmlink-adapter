@@ -47,6 +47,7 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 - [ ] MD5 authentication สำเร็จด้วย test user
 - [ ] MD5 key ผิดตอบ `401` และไม่ใช้ linked bearer เดิม
 - [ ] Bearer authentication สำเร็จ
+- [ ] First KOReader auth with a username matching the bound Metadata account creates the Reader link automatically; mismatched usernames are never linked
 - [ ] access token หมดอายุแล้ว refresh ได้หนึ่งครั้ง
 - [ ] invalid/expired refresh token fail closed
 - [ ] MD5 และ Bearer คนละ user ถูกปฏิเสธ
@@ -200,10 +201,19 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 
 ## 15. Restart, offline และ failure recovery
 
+- [ ] หน้า Metadata ออก session อัตโนมัติจากบัญชี background ที่ผูกไว้ ทั้งใน LAN และ Tailscale
+- [ ] session หน้า Metadata เข้าถึง route `/local/**` ได้ แต่เรียก route Reader API ไม่ได้
+- [ ] เมื่อยังไม่มีบัญชี background หน้า UI แสดงขั้นตอน setup ครั้งแรก; หลังผูกบัญชีแล้วเปิดอีกแท็บได้โดยไม่ล็อกอินซ้ำ
+- [ ] OPF-first เลือก OPF เพียงไฟล์เดียว; เมื่อไม่มีหรือ malformed จึง fallback ไป JSON sidecar
+- [ ] JSON sidecar ที่อ้าง cover หายยังอ่าน metadata ได้ แต่ cover แสดงว่าไม่มี
 - [ ] restart Adapter ระหว่างไม่มี pending operation
+- [ ] บูต Adapter ก่อน Official: `/healthcheck` คงเป็น liveness ส่วน `/readyz` ตอบ `503` จนกว่า Official จะพร้อม แล้วเปลี่ยนเป็น `200` โดยไม่ restart Adapter
+- [ ] Grimmory หยุดระหว่าง Auto/Manual metadata run แล้ว run คง `queued` พร้อม backoff และทำต่อหลัง Grimmory กลับมา
+- [ ] timeout หลัง metadata API อาจ commit แล้ว: intent/readback reconcile ก่อน retry โดยไม่เขียนซ้ำหรือทับค่าที่แก้จากที่อื่น
 - [ ] restart Adapter ขณะมี pending shelf mutation
 - [ ] restart Adapter ขณะมี pending metadata mutation
 - [ ] restart Adapter ขณะมี pending reading session
+- [ ] pending reading session reconcile หลัง user เจ้าของส่ง authenticated request ถัดไป
 - [ ] Official unavailable แล้ว Adapter ตอบ typed `502/504` ตามกรณี
 - [ ] Official กลับมาแล้ว queue/reconciliation ทำงาน
 - [ ] network timeout หลัง possible commit ไม่สร้าง duplicate

@@ -462,6 +462,24 @@ class ProgressStateCache:
             return int(cursor.rowcount or 0)
 
     @staticmethod
+    async def get_manual_status_for_book(owner_key: str, book_id: int) -> dict[str, str | int] | None:
+        """Return the last status written through the adapter for one scoped book."""
+        async with get_connection() as conn, conn.execute(
+            """
+            SELECT manual_status, manual_status_epoch FROM manual_status_state
+            WHERE owner_key = ? AND book_id = ?
+            """,
+            (owner_key, book_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if not row or row["manual_status_epoch"] is None:
+            return None
+        return {
+            "status": str(row["manual_status"]),
+            "updatedAt": int(row["manual_status_epoch"]),
+        }
+
+    @staticmethod
     async def manual_status_is_newer(
         owner_key: str, book_hash: str, progress_epoch: int | None, book_id: int | None = None,
     ) -> bool:

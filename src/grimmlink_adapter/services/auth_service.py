@@ -1,6 +1,7 @@
 """Authentication bridge service translating GrimmLink MD5 credentials to Official Grimmory."""
 
 import logging
+from contextlib import suppress
 
 import httpx
 from fastapi import HTTPException, status
@@ -35,21 +36,66 @@ class AuthService:
         if creds.username and creds.md5_key:
             try:
                 auth_data = await self.official_client.get_koreader_auth(creds.username, creds.md5_key)
-                user_id = auth_data.get("userId") or auth_data.get("id")
-                if user_id is None:
-                    # Stock Grimmory authenticates the KOReader key but returns
-                    # only the username. Resolve the numeric identity from the
-                    # explicitly linked, same-credential account.
-                    from grimmlink_adapter.config import settings
-
-                    linked = await LinkedAccountStore.get_by_credentials(
-                        settings.GRIMMORY_BASE_URL.rstrip("/"), creds.username, creds.md5_key,
+                auth_username = auth_data.get("username")
+                if isinstance(auth_username, str) and auth_username != creds.username:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="KOReader credentials resolved to a different Grimmory username.",
                     )
-                    user_id = linked.user_id if linked is not None else None
+                user_id = auth_data.get("userId") or auth_data.get("id")
                 if isinstance(user_id, str) and user_id.isdigit():
                     user_id = int(user_id)
+                linked = None
+                from grimmlink_adapter.config import settings
+
+                server = settings.GRIMMORY_BASE_URL.rstrip("/")
+                linked = await LinkedAccountStore.get_by_credentials(
+                    server, creds.username, creds.md5_key,
+                )
+                if user_id is None:
+                    # Stock Grimmory authenticates the KOReader key but returns
+                    # only the username. Reuse an explicit link, or automatically
+                    # bind to the same username's already-authenticated Metadata
+                    # account after verifying its JWT profile.
+                    user_id = int(linked.user_id) if linked is not None else None
+                    if user_id is None:
+                        from grimmlink_adapter.services.metadata_automation import (
+                            MetadataBlocked,
+                            metadata_automation,
+                        )
+
+                        try:
+                            user_id = await metadata_automation.link_reader_account(
+                                creds.username, creds.md5_key,
+                            )
+                        except MetadataBlocked:
+                            user_id = None
+                elif linked is not None and str(linked.user_id) != str(user_id):
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="KOReader and linked Grimmory account identities do not match.",
+                    )
+                elif linked is None and isinstance(user_id, int) and not isinstance(user_id, bool):
+                    # Some Grimmory forks include a user ID in KOReader auth.
+                    # If a background Metadata account is already bound to that
+                    # same user, establish the Reader link on first use too.
+                    from grimmlink_adapter.services.metadata_automation import (
+                        MetadataBlocked,
+                        metadata_automation,
+                    )
+
+                    with suppress(MetadataBlocked):
+                        await metadata_automation.link_reader_account(
+                            creds.username, creds.md5_key, expected_user_id=int(user_id),
+                        )
                 if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
-                    raise OfficialBadResponseError("KOReader auth response missing a valid user ID")
+                    raise HTTPException(
+                        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                        detail=(
+                            "Grimmory accepted KOReader authentication but did not return a user ID. "
+                            "Bind this same username in the Metadata account setup to enable automatic linking."
+                        ),
+                    )
                 sync_enabled = auth_data.get("syncEnabled", True)
                 sync_with_web = auth_data.get("syncWithWebReader", True)
                 return GrimmlinkAuthResponse(

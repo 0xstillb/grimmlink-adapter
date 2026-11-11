@@ -42,12 +42,14 @@ from grimmlink_adapter.security.auth_extractor import (
     get_adapter_session,
     require_v2_credentials,
 )
+from grimmlink_adapter.security.metadata_vault import metadata_cipher
 from grimmlink_adapter.services.auth_service import AuthService
 from grimmlink_adapter.services.diagnostics import collect_diagnostics
 from grimmlink_adapter.services.metadata_automation import (
     MetadataBlocked,
     check_storage,
     mapped_root,
+    metadata_automation,
     metadata_execution_lock,
     server_key,
 )
@@ -65,6 +67,7 @@ from grimmlink_adapter.services.prose_converter import prose_converter
 from grimmlink_adapter.services.request_auth import get_official_bearer
 from grimmlink_adapter.services.shelf_service import ShelfService
 from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSessionStore
+from grimmlink_adapter.state.cache import ProgressStateCache
 from grimmlink_adapter.state.metadata_automation import MetadataAutomationStore
 
 router = APIRouter(tags=["GrimmLink v2"])
@@ -118,7 +121,58 @@ async def create_local_ui_session(request: V2LocalPasswordLogin) -> V2SessionRes
         raise HTTPException(status_code=502, detail="Grimmory account identity is unavailable.")
     username = str(profile.get("username") or request.username)
     token, session = await AdapterSessionStore.create_official(
-        username, user_id, login.token, login.refreshToken,
+        username, user_id, login.token, login.refreshToken, scope="metadata_ui",
+    )
+    return V2SessionResponse(
+        accessToken=token, expiresAt=session.expires_at, username=username, userId=user_id,
+    )
+
+
+@router.post("/local/auth/session/auto", response_model=V2SessionResponse)
+async def create_local_ui_auto_session() -> V2SessionResponse:
+    """Issue a short-lived, local-UI-only session from the bound background account."""
+    owners = await MetadataAutomationStore.query(
+        "SELECT DISTINCT owner_id FROM metadata_libraries WHERE server=? ORDER BY owner_id",
+        (server_key(),),
+    )
+    if len(owners) == 1:
+        user_id = int(owners[0]["owner_id"])
+    elif len(owners) > 1:
+        raise HTTPException(status_code=409, detail="metadata_ui_operator_ambiguous")
+    else:
+        accounts = await MetadataAutomationStore.query(
+            "SELECT user_id FROM metadata_accounts WHERE server=? ORDER BY user_id",
+            (server_key(),),
+        )
+        if len(accounts) != 1:
+            detail = "background_account_not_connected" if not accounts else "metadata_ui_operator_ambiguous"
+            raise HTTPException(status_code=409, detail=detail)
+        user_id = int(accounts[0]["user_id"])
+
+    account_rows = await MetadataAutomationStore.query(
+        "SELECT encrypted_credentials,blocked_reason FROM metadata_accounts WHERE server=? AND user_id=?",
+        (server_key(), user_id),
+    )
+    if not account_rows:
+        raise HTTPException(status_code=409, detail="background_account_not_connected")
+    if account_rows[0]["blocked_reason"]:
+        raise HTTPException(status_code=409, detail="background_account_reconnect_required")
+    try:
+        access_token = await metadata_automation.bearer(user_id)
+        fresh_rows = await MetadataAutomationStore.query(
+            "SELECT encrypted_credentials FROM metadata_accounts WHERE server=? AND user_id=?",
+            (server_key(), user_id),
+        )
+        saved = json.loads(metadata_cipher().decrypt(fresh_rows[0]["encrypted_credentials"].encode()))
+    except MetadataBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=409, detail="background_account_reconnect_required") from exc
+    username = saved.get("username")
+    if not isinstance(username, str) or not username:
+        raise HTTPException(status_code=409, detail="background_account_reconnect_required")
+    token, session = await AdapterSessionStore.create_official(
+        username, user_id, access_token, saved.get("refresh"), scope="metadata_ui",
     )
     return V2SessionResponse(
         accessToken=token, expiresAt=session.expires_at, username=username, userId=user_id,
@@ -280,6 +334,32 @@ async def get_v2_progress(
         preferred = native_snapshot
     if reader == "koreader" and book_is_newer:
         preferred = progress
+
+    # A newer snapshot is not useful to a reader when it only contains a
+    # percentage. Prefer the alternate source when it has an actual locator;
+    # otherwise KOReader receives a format-only position and cannot offer its
+    # jump dialog.
+    def has_locator(candidate: KoreaderProgressPayload | object | None) -> bool:
+        if candidate is None:
+            return False
+        if isinstance(candidate, KoreaderProgressPayload):
+            return bool(
+                candidate.currentPage
+                or candidate.progress
+                or candidate.location
+                or candidate.xpointer
+                or candidate.cfi
+            )
+        return bool(
+            getattr(candidate, "current_page", None)
+            or getattr(candidate, "native_location", None)
+            or getattr(candidate, "xpointer", None)
+            or getattr(candidate, "cfi", None)
+        )
+
+    alternate = native_snapshot if preferred is progress else progress
+    if not has_locator(preferred) and has_locator(alternate):
+        preferred = alternate
     assert preferred is not None
     fmt = (
         (progress.fileFormat or progress.format) if progress else None
@@ -296,6 +376,14 @@ async def get_v2_progress(
     href = preferred.href
     percentage = preferred.percentage if isinstance(preferred, KoreaderProgressPayload) else preferred.display_percent
     updated_at = preferred.updatedAt if isinstance(preferred, KoreaderProgressPayload) else preferred.updated_at
+    device = (
+        preferred.device if isinstance(preferred, KoreaderProgressPayload)
+        else getattr(preferred, "device", None)
+    )
+    device_id = (
+        preferred.device_id if isinstance(preferred, KoreaderProgressPayload)
+        else getattr(preferred, "device_id", None)
+    )
     if fmt in {"PDF", "CBZ", "CBR", "DJVU"} and page is None:
         page_location = preferred.progress if isinstance(preferred, KoreaderProgressPayload) else preferred.native_location
         if page_location and str(page_location).isdigit() and int(page_location) >= 1:
@@ -322,6 +410,8 @@ async def get_v2_progress(
         "position": position.model_dump(exclude_none=True),
         "reader": reader,
         "source": "book-api" if isinstance(preferred, KoreaderProgressPayload) else "koreader-native",
+        "device": device,
+        "deviceId": device_id,
     }
 
 
@@ -457,7 +547,22 @@ async def v2_pull_metadata(
     client = OfficialGrimmoryClient()
     try:
         book = await client.get_book_by_id(book_id, bearer)
-        return {"bookId": book_id, "metadata": book.get("metadata"), "readStatus": book.get("readStatus")}
+        owner_key = (
+            f"user:{getattr(bearer, 'user_id', '')}"
+            if creds.bearer_token else ProgressService._owner_key(creds)
+        )
+        cached_status = await ProgressStateCache.get_manual_status_for_book(owner_key, book_id)
+        raw_status_time = book.get("readStatusModifiedTime") or book.get("updatedAt")
+        if not raw_status_time and cached_status:
+            raw_status_time = datetime.fromtimestamp(
+                int(cached_status["updatedAt"]), UTC,
+            ).isoformat().replace("+00:00", "Z")
+        return {
+            "bookId": book_id,
+            "metadata": book.get("metadata"),
+            "readStatus": book.get("readStatus"),
+            "readStatusModifiedTime": raw_status_time,
+        }
     finally:
         await client.aclose()
 

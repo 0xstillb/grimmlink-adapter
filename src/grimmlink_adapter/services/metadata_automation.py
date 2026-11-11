@@ -20,9 +20,13 @@ from grimmlink_adapter.official.auth import parse_jwt_expiry
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import (
     OfficialAuthError,
+    OfficialBadResponseError,
     OfficialPermissionError,
+    OfficialTimeoutError,
+    OfficialTransportError,
 )
-from grimmlink_adapter.opf.parser import file_fingerprint
+from grimmlink_adapter.opf.parser import OPFError, file_fingerprint
+from grimmlink_adapter.opf.sidecar import InvalidMetadataSidecarError
 from grimmlink_adapter.security.account_locks import credential_refresh_lock
 from grimmlink_adapter.security.metadata_vault import metadata_cipher
 from grimmlink_adapter.services.metadata_planner import (
@@ -34,12 +38,28 @@ from grimmlink_adapter.services.metadata_planner import (
     source_candidates,
 )
 from grimmlink_adapter.services.opf_ingestion import OPFIngestionService
-from grimmlink_adapter.state.linked_accounts import LinkedAccount, LinkedAccountStore
+from grimmlink_adapter.state.linked_accounts import (
+    LinkedAccount,
+    LinkedAccountStore,
+    digest_md5_key,
+)
 from grimmlink_adapter.state.metadata_automation import MetadataAutomationStore as Store
 
 logger = logging.getLogger(__name__)
 # Shared with the existing explicit per-file manual endpoints.
 metadata_execution_lock = asyncio.Lock()
+_TRANSIENT_UPSTREAM_STATUSES = {502, 503, 504}
+
+
+def _is_transient_upstream_error(exc: Exception) -> bool:
+    return isinstance(exc, (OfficialTransportError, OfficialTimeoutError)) or (
+        isinstance(exc, OfficialBadResponseError) and exc.status_code in _TRANSIENT_UPSTREAM_STATUSES
+    )
+
+
+def _upstream_retry_delay(attempts: int) -> int:
+    """Bounded exponential delay for upstream outages: 30s to 15m."""
+    return int(min(900, 30 * 2 ** min(max(attempts, 0), 5)))
 
 
 class MetadataBlocked(Exception):
@@ -168,14 +188,25 @@ def inspect_sources(
         if not candidates:
             continue
         groups: tuple[list[Path], ...] = (candidates,)
-        if policy.sourcePreference != "review":
-            preferred = [p for p in candidates if (p.suffix.lower() == ".opf") == (policy.sourcePreference == "opf")]
-            groups = (preferred, [p for p in candidates if p not in preferred])
+        if policy.sourcePreference == "opf":
+            opf_candidates = [p for p in candidates if p.suffix.lower() == ".opf"]
+            json_candidates = [p for p in candidates if p.name.lower().endswith(".metadata.json")]
+            # Use one deterministic OPF, then the first JSON sidecar only when
+            # that OPF is absent or malformed.
+            groups = ([opf_candidates[0]] if opf_candidates else [], json_candidates[:1])
+        elif policy.sourcePreference == "json":
+            groups = ([p for p in candidates if p.name.lower().endswith(".metadata.json")][:1],
+                      [p for p in candidates if p.suffix.lower() == ".opf"][:1])
         stat = file_stamp(path.stat())
         for group in groups:
             count = len(found)
             for source in group:
-                parsed = read_source(source)
+                try:
+                    parsed = read_source(source)
+                except (OPFError, InvalidMetadataSidecarError):
+                    # A malformed preferred source should not block the
+                    # configured fallback format.
+                    continue
                 if parsed is None:
                     continue
                 document, revision = parsed
@@ -275,6 +306,72 @@ class MetadataAutomation:
                    "source": "direct" if linked is None else "linked"}
         encrypted = metadata_cipher().encrypt(json.dumps(payload).encode()).decode()
         await Store.execute("INSERT INTO metadata_accounts(server,user_id,encrypted_credentials) VALUES(?,?,?) ON CONFLICT(server,user_id) DO UPDATE SET encrypted_credentials=excluded.encrypted_credentials,blocked_reason=NULL", (server_key(), user_id, encrypted))
+
+    async def link_reader_account(
+        self, username: str, md5_key: str, *, expected_user_id: int | None = None,
+    ) -> int | None:
+        """Bind a verified KOReader key to a matching Metadata account without a CLI step.
+
+        Callers must first verify the key with Grimmory's KOReader auth endpoint.
+        The already-bound Metadata JWT then supplies the numeric identity that the
+        stock KOReader auth response omits. Only an exact username/profile match
+        is accepted.
+        """
+        rows = await Store.query(
+            "SELECT user_id,encrypted_credentials FROM metadata_accounts WHERE server=? AND blocked_reason IS NULL",
+            (server_key(),),
+        )
+        candidates: list[tuple[int, dict[str, Any]]] = []
+        for row in rows:
+            try:
+                data = json.loads(metadata_cipher().decrypt(row["encrypted_credentials"].encode()))
+            except Exception:
+                continue
+            user_id = int(row["user_id"])
+            if data.get("username") != username:
+                continue
+            if expected_user_id is not None and user_id != expected_user_id:
+                continue
+            candidates.append((user_id, data))
+        if len(candidates) != 1:
+            return None
+
+        user_id, _ = candidates[0]
+        access = await self.bearer(user_id)
+        async with OfficialGrimmoryClient() as client:
+            profile = await client.get_current_user(access)
+        profile_id = profile.get("id", profile.get("userId"))
+        if str(profile_id) != str(user_id) or profile.get("username") != username:
+            return None
+
+        # bearer() may have rotated the token, so reload its durable credentials
+        # after profile verification and make Reader and Metadata share one
+        # refresh-token chain.
+        current = await Store.query(
+            "SELECT encrypted_credentials FROM metadata_accounts WHERE server=? AND user_id=?",
+            (server_key(), user_id),
+        )
+        if len(current) != 1:
+            return None
+        data = json.loads(metadata_cipher().decrypt(current[0]["encrypted_credentials"].encode()))
+        if data.get("username") != username or data.get("access") != access:
+            return None
+        data["source"] = "linked"
+        encrypted = metadata_cipher().encrypt(json.dumps(data).encode()).decode()
+        await Store.execute(
+            "UPDATE metadata_accounts SET encrypted_credentials=? WHERE server=? AND user_id=?",
+            (encrypted, server_key(), user_id),
+        )
+        await LinkedAccountStore.put(LinkedAccount(
+            server=server_key(),
+            user_id=str(user_id),
+            username=username,
+            md5_key_digest=digest_md5_key(md5_key),
+            access_token=access,
+            refresh_token=data.get("refresh"),
+        ))
+        logger.info("Linked verified KOReader credentials to existing Metadata account for user %s", user_id)
+        return user_id
 
     async def bearer(self, user_id: int) -> str:
         async with credential_refresh_lock:
@@ -422,6 +519,11 @@ class MetadataAutomation:
                     except (OfficialAuthError, OfficialPermissionError):
                         raise
                     except Exception as exc:
+                        if _is_transient_upstream_error(exc):
+                            # Preserve the current book position and retry the same durable run.
+                            # process() stores a before/after intent before metadata writes and
+                            # reconciles it against a fresh upstream read before another write.
+                            raise
                         if isinstance(exc, OSError):
                             # A missing book may be transient even though the NAS is still online.
                             await asyncio.to_thread(check_storage, policy)
@@ -461,13 +563,22 @@ class MetadataAutomation:
                 result["reason"] = "background_account_reconnect_required"
                 await Store.execute("UPDATE metadata_accounts SET blocked_reason=? WHERE server=? AND user_id=?", (result["reason"], server_key(), run["owner_id"]))
             await self.progress(run["id"], result, "blocked")
-        except OSError:
-            result["reason"] = "storage_unavailable"
-            delay = min(900, 30 * 2 ** min(run["attempts"], 5))
-            await self.retry_run(run["id"], result, delay, rediscover=result["phase"] != "processing")
         except Exception as exc:
-            result["reason"] = str(exc) if isinstance(exc, MetadataBlocked) else type(exc).__name__
-            await self.progress(run["id"], result, "blocked" if isinstance(exc, (MetadataBlocked, OSError)) else "failed")
+            if _is_transient_upstream_error(exc):
+                result["reason"] = "grimmory_unavailable"
+                delay = _upstream_retry_delay(run["attempts"])
+                logger.warning(
+                    "Metadata run %s paused while Grimmory is unavailable; retrying in %ds (attempt %d)",
+                    run["id"], delay, run["attempts"] + 1,
+                )
+                await self.retry_run(run["id"], result, delay, rediscover=result["phase"] != "processing")
+            elif isinstance(exc, OSError):
+                result["reason"] = "storage_unavailable"
+                delay = _upstream_retry_delay(run["attempts"])
+                await self.retry_run(run["id"], result, delay, rediscover=result["phase"] != "processing")
+            else:
+                result["reason"] = str(exc) if isinstance(exc, MetadataBlocked) else type(exc).__name__
+                await self.progress(run["id"], result, "blocked" if isinstance(exc, MetadataBlocked) else "failed")
         finally:
             latest = await Store.query("SELECT followup,cancel_requested,state FROM metadata_runs WHERE id=?", (run["id"],))
             if latest and latest[0]["followup"] and not latest[0]["cancel_requested"] and latest[0]["state"] not in ("queued", "running"):

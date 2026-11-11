@@ -625,11 +625,11 @@
     <div id="fileNotice" class="banner" hidden><strong>คุณกำลังดูไฟล์ตัวอย่าง UI</strong> — การเข้าสู่ระบบและตรวจสอบข้อมูลต้องเปิดจาก Adapter ที่กำลังทำงาน เช่น <a href="http://localhost:8085/api/grimmlink/v2/local/metadata">localhost:8085</a> หรือ IP ของเครื่องในวง LAN</div>
     <section id="setup" class="page" aria-labelledby="setupTitle">
       <div class="page-heading"><div><p class="eyebrow">LET’S GET CONNECTED</p><h1 id="setupTitle" tabindex="-1">พื้นที่อ่านที่เชื่อมถึงกัน</h1><p class="subtitle">ตั้งค่า GrimmLink ให้พร้อม แล้วจัดการข้อมูลหนังสือได้จากที่เดียว</p></div><span class="pill">ADAPTER V2</span></div>
-      <div class="step-strip" aria-label="ขั้นตอนเริ่มใช้งาน"><a href="#loginPanel"><span class="step-circle active">1</span>เข้าสู่ระบบ Grimmory</a><a href="#databasePanel"><span class="step-circle">2</span>เตรียม Sync หนังสือครั้งแรก</a><a href="#diagnostics"><span class="step-circle">3</span>ตรวจสอบความพร้อม</a></div>
+      <div class="step-strip" aria-label="ขั้นตอนเริ่มใช้งาน"><a href="#loginPanel"><span class="step-circle active">1</span>เชื่อมต่อบัญชีงานเบื้องหลัง</a><a href="#databasePanel"><span class="step-circle">2</span>เตรียม Sync หนังสือครั้งแรก</a><a href="#diagnostics"><span class="step-circle">3</span>ตรวจสอบความพร้อม</a></div>
       <div class="layout"><div class="stack">
-        <article class="card" id="loginPanel" tabindex="-1"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-link"/></svg></span><div><h2>เข้าสู่ระบบ Grimmory</h2><p>ใช้บัญชีที่เข้าสู่เว็บไซต์ Grimmory เพื่อจัดการ Library และ Metadata</p></div></div>
-          <div class="card-body"><div class="note"><strong>เข้าสู่ระบบแยกตามแท็บและอุปกรณ์</strong>ถ้าล็อกอินบนมือถือแล้วเปิดหน้านี้บนคอม ให้เข้าสู่ระบบอีกครั้งด้วยบัญชี Grimmory เดิม การตั้งค่า Sync และงาน Metadata อัตโนมัติที่ผูกไว้ยังอยู่บน Pi แต่ไม่ได้ให้สิทธิ์เข้า UI กับคอมเครื่องอื่น</div><form id="loginForm"><div class="row"><div class="field"><label for="username">Grimmory username</label><input id="username" autocomplete="username" placeholder="ชื่อผู้ใช้ Grimmory" required></div><div class="field"><label for="password">Grimmory password</label><div class="password-field"><input id="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน Grimmory" required><button type="button" data-reveal="password" aria-label="แสดงรหัสผ่าน Grimmory" aria-pressed="false">แสดง</button></div></div></div><div class="actions"><button class="primary" id="login" type="submit">เข้าสู่ระบบบนแท็บนี้ <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><span class="helper">Readest และ KOReader รับรหัส KOSync ในแอปอ่านโดยตรง</span></div></form>
-          <div id="connectedPanel" hidden><div class="signed-in"><span class="avatar"><svg aria-hidden="true"><use href="#i-check"/></svg></span><div><strong>มีเซสชันพร้อมใช้งาน</strong><p id="connectedName">ระบบจะตรวจสอบเซสชันเมื่อเรียกข้อมูล</p></div></div><button id="logout">ออกจากระบบ</button></div><p id="loginMessage" class="feedback" role="status"></p></div>
+        <article class="card" id="loginPanel" tabindex="-1"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-link"/></svg></span><div><h2>สถานะการเชื่อมต่อ</h2><p>หน้า Metadata เชื่อมต่ออัตโนมัติด้วยบัญชีงานเบื้องหลังของ Grimmory</p></div></div>
+          <div class="card-body"><div class="note" id="firstLoginNote" hidden><strong>ตั้งค่าครั้งแรกเท่านั้น</strong>เข้าสู่ระบบเพื่อผูกบัญชีงานเบื้องหลัง หลังจากนั้นหน้า Metadata จะเชื่อมต่อให้อัตโนมัติใน Wi‑Fi บ้านและ Tailscale</div><form id="loginForm" hidden><div class="row"><div class="field"><label for="username">Grimmory username</label><input id="username" autocomplete="username" placeholder="ชื่อผู้ใช้ Grimmory" required></div><div class="field"><label for="password">Grimmory password</label><div class="password-field"><input id="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน Grimmory" required><button type="button" data-reveal="password" aria-label="แสดงรหัสผ่าน Grimmory" aria-pressed="false">แสดง</button></div></div></div><div class="actions"><button class="primary" id="login" type="submit">ผูกบัญชีครั้งแรก <svg aria-hidden="true"><use href="#i-arrow"/></svg></button><span class="helper">Readest และ KOReader ยังใช้บัญชี KOSync ในแอปอ่านตามเดิม</span></div></form>
+          <div id="connectedPanel" hidden><div class="signed-in"><span class="avatar"><svg aria-hidden="true"><use href="#i-check"/></svg></span><div><strong>Metadata พร้อมใช้งาน</strong><p id="connectedName">เชื่อมต่อด้วยบัญชีงานเบื้องหลัง</p></div></div><button id="logout" hidden>ออกจากระบบ</button></div><p id="loginMessage" class="feedback" role="status"></p></div>
         </article>
         <article class="card" id="databasePanel" tabindex="-1"><div class="card-header"><span class="icon-box"><svg aria-hidden="true"><use href="#i-db"/></svg></span><div><h2>เตรียม Sync หนังสือครั้งแรก</h2><p>ให้ Adapter จับคู่ไฟล์กับหนังสือใน Grimmory ได้อัตโนมัติ</p></div></div>
           <div class="card-body"><div class="note" id="syncSetupStatus" role="status"><strong>กำลังตรวจสอบการตั้งค่า</strong>กำลังอ่านสถานะการจับคู่หนังสือจาก Adapter…</div><p class="helper">ขั้นตอนนี้เตรียมการจับคู่หนังสือจากไฟล์ ไม่ได้สั่ง Sync หนังสือทุกเล่ม การ Sync shelf และตำแหน่งอ่านเริ่มจาก Readest หรือ KOReader</p><p><a href="#diagnostics">ตรวจสอบการเชื่อมต่อจริงในหน้าตรวจสอบระบบ</a></p><details id="dbConfigDetails"><summary>ดูวิธีตั้งค่าฐานข้อมูล (ขั้นสูง)</summary>
@@ -660,7 +660,7 @@
             <label style="display:flex;align-items:center;gap:10px"><input id="automationAuto" type="checkbox" style="width:18px;min-height:18px">เปิด Auto สำหรับ Library นี้</label>
             <div class="field"><label for="automationInterval">ตรวจหา Metadata ใหม่ทุก (วินาที)</label><input id="automationInterval" type="number" min="60" max="86400" value="300" required></div>
             <details id="automationPolicyDetails" style="margin:16px 0"><summary>ตั้งค่าโฟลเดอร์ NAS และฟิลด์ Metadata</summary>
-              <div class="field"><label for="automationPreference">เมื่อมี OPF และ sidecar พร้อมกัน</label><select id="automationPreference"><option value="review">หยุดรอตรวจสอบ</option><option value="opf">ใช้ OPF</option><option value="json">ใช้ JSON sidecar</option></select></div>
+              <div class="field"><label for="automationPreference">ลำดับการเลือก Metadata</label><select id="automationPreference"><option value="review">หยุดตรวจสอบเมื่อข้อมูลขัดแย้ง</option><option value="opf">ใช้ OPF ก่อน; fallback เป็น JSON sidecar</option><option value="json">ใช้ JSON sidecar ก่อน; fallback เป็น OPF</option></select><p class="helper">เลือกแหล่งหลักหนึ่งไฟล์ หากไม่มีหรืออ่าน Metadata ไม่ได้ จะลองอีกแหล่งเป็น fallback</p></div>
               <p class="helper">จับคู่ path ของ Grimmory กับโฟลเดอร์ NAS ที่ Adapter เห็น และใช้ marker ตรวจว่า NAS ยัง mount อยู่</p>
               <div id="automationMappings"></div>
               <fieldset style="margin:16px 0;border:1px solid var(--hairline,#dce3da);border-radius:8px"><legend>ฟิลด์ Metadata</legend><div id="automationFields" style="display:flex;gap:12px;flex-wrap:wrap"></div></fieldset>
@@ -689,6 +689,7 @@
   const isPreviewMode = location.protocol === "file:" || new URLSearchParams(location.search).get("preview") === "1";
   let sessionToken = null;
   try { sessionToken = sessionStorage.getItem(tokenKey); } catch (_) {}
+  let autoSessionMode = false, allowFirstTimeLogin = false, autoSessionFlight = null;
   let sources = [], currentPreview = null, reviewedPayload = null, diagnosticReport = null;
   let selectionVersion = 0;
   const busy = new Set();
@@ -702,12 +703,15 @@
   const syncControls = () => {
     const online = Boolean(sessionToken) && !isPreviewMode;
     const metadataBusy = ["scan", "preview", "apply"].some(key => busy.has(key));
-    $("loginForm").hidden = Boolean(sessionToken); $("connectedPanel").hidden = !sessionToken;
-    $("loginShortcut").textContent = sessionToken ? "เชื่อมต่อแล้ว" : "เข้าสู่ระบบ";
-    $("loginShortcut").title = sessionToken ? "แท็บนี้เข้าสู่ระบบแล้ว" : "เข้าสู่ระบบสำหรับแท็บนี้";
-    $("sessionLabel").textContent = sessionToken ? "แท็บนี้มีเซสชัน" : "แท็บนี้ยังไม่ได้เข้าสู่ระบบ";
+    $("loginForm").hidden = Boolean(sessionToken) || !allowFirstTimeLogin; $("connectedPanel").hidden = !sessionToken;
+    $("firstLoginNote").hidden = !allowFirstTimeLogin || Boolean(sessionToken);
+    $("loginShortcut").hidden = !allowFirstTimeLogin || Boolean(sessionToken);
+    $("loginShortcut").textContent = "ตั้งค่าบัญชีครั้งแรก";
+    $("loginShortcut").title = "แสดงขั้นตอนผูกบัญชีงานเบื้องหลัง";
+    $("sessionLabel").textContent = sessionToken ? (autoSessionMode ? "Metadata เชื่อมต่ออัตโนมัติ" : "มีเซสชันพร้อมใช้งาน") : (allowFirstTimeLogin ? "รอผูกบัญชีครั้งแรก" : "กำลังเชื่อมต่ออัตโนมัติ");
     $("sessionDot").classList.toggle("connected", Boolean(sessionToken));
     $("login").disabled = isPreviewMode || busy.has("login");
+    $("logout").hidden = autoSessionMode;
     $("logout").disabled = busy.has("logout") || metadataBusy || busy.has("runDiagnostics");
     $("runDiagnostics").disabled = !online || busy.has("runDiagnostics") || busy.has("logout");
     $("downloadDiagnostics").disabled = !diagnosticReport || busy.has("runDiagnostics");
@@ -734,6 +738,7 @@
   };
   const clearSession = () => {
     sessionToken = null; try { sessionStorage.removeItem(tokenKey); } catch (_) {}
+    autoSessionMode = false;
     sources = []; diagnosticReport = null; invalidatePreview();
     $("source").replaceChildren(new Option("สแกนเพื่อเลือกไฟล์", ""));
     $("book").replaceChildren(new Option("เลือกไฟล์ต้นทางก่อน", ""));
@@ -741,14 +746,24 @@
     $("sourceCount").textContent = "ยังไม่ได้สแกน"; say("scanMessage", ""); syncControls();
     $("automationLibrary").replaceChildren(); clearActivity(); $("automationTools").hidden = true; autoData = null;
   };
-  const request = async (path, options = {}) => {
+  const request = async (path, options = {}, retriedSession = false) => {
     if (isPreviewMode) throw new Error("เปิดหน้านี้จาก URL ของ Adapter ก่อนใช้งาน");
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 90000);
     try {
       const response = await fetch(base + path, { ...options, signal: controller.signal });
       const data = response.status === 204 ? null : await response.json().catch(() => null);
-      if (response.status === 401 && path !== "/local/auth/session") { clearSession(); say("loginMessage", "เซสชันหมดอายุ กรุณาเชื่อมต่อบัญชีอีกครั้ง", "error"); throw new Error("เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งที่หน้าตั้งค่า"); }
+      if (response.status === 401 && !path.startsWith("/local/auth/session")) {
+        clearSession();
+        if (!retriedSession) {
+          try { await createAutomaticSession(); return await request(path, options, true); }
+          catch (error) {
+            allowFirstTimeLogin = true; $("loginForm").hidden = false; $("firstLoginNote").hidden = false;
+            say("loginMessage", error.message, "error"); syncControls();
+          }
+        }
+        throw new Error("เซสชันหมดอายุ และเชื่อมต่อบัญชีงานเบื้องหลังอัตโนมัติไม่ได้ กรุณาตั้งค่าบัญชีอีกครั้ง");
+      }
       if (!response.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `คำขอไม่สำเร็จ (HTTP ${response.status})`);
       if (response.status !== 204 && data === null) throw new Error("เซิร์ฟเวอร์ตอบกลับในรูปแบบที่ไม่ถูกต้อง");
       return data;
@@ -757,6 +772,20 @@
       if (error instanceof TypeError) throw new Error("เชื่อมต่อ Adapter ไม่ได้ ตรวจสอบว่าเซิร์ฟเวอร์ทำงานและเครือข่ายพร้อมใช้งาน");
       throw error;
     } finally { clearTimeout(timeout); }
+  };
+  const createAutomaticSession = async () => {
+    if (autoSessionFlight) return autoSessionFlight;
+    autoSessionFlight = (async () => {
+      const response = await fetch(base + "/local/auth/session/auto", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `เชื่อมต่ออัตโนมัติไม่สำเร็จ (HTTP ${response.status})`);
+      sessionToken = data.accessToken; autoSessionMode = true; allowFirstTimeLogin = false;
+      try { sessionStorage.setItem(tokenKey, sessionToken); } catch (_) {}
+      $("connectedName").textContent = `${data.username} · บัญชีงานเบื้องหลัง`;
+      say("loginMessage", "เชื่อมต่อ Metadata อัตโนมัติแล้ว", "success"); syncControls();
+      return data;
+    })();
+    try { return await autoSessionFlight; } finally { autoSessionFlight = null; }
   };
   const showPage = (focus = false) => {
     const hash = location.hash.slice(1);
@@ -816,11 +845,22 @@
       say("loginMessage", "");
       try {
         const result = await request("/local/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: $("username").value.trim(), password: $("password").value }) });
-        sessionToken = result.accessToken; try { sessionStorage.setItem(tokenKey, sessionToken); } catch (_) {}
+        sessionToken = result.accessToken; autoSessionMode = false; allowFirstTimeLogin = false; try { sessionStorage.setItem(tokenKey, sessionToken); } catch (_) {}
         $("password").value = ""; $("connectedName").textContent = result.username;
-        say("loginMessage", "เข้าสู่ระบบบนแท็บนี้สำเร็จ พร้อมตรวจสอบระบบและจัดการ Metadata", "success");
+        say("loginMessage", "เชื่อมบัญชีสำเร็จ ผูกบัญชีงานเบื้องหลังครั้งเดียวเพื่อใช้ครั้งต่อไปโดยไม่ต้องล็อกอิน", "success");
       } catch (error) { say("loginMessage", error.message, "error"); }
     });
+  };
+  const initializeSession = async () => {
+    if (isPreviewMode) return;
+    try {
+      if (!sessionToken) await createAutomaticSession();
+      await loadAutomation();
+    } catch (error) {
+      clearSession(); allowFirstTimeLogin = true;
+      const message = ({ background_account_not_connected: "ยังไม่ได้ผูกบัญชีงานเบื้องหลัง เข้าสู่ระบบครั้งเดียวแล้วกด ‘ผูกบัญชีงานเบื้องหลัง’", background_account_reconnect_required: "บัญชีงานเบื้องหลังต้องเชื่อมใหม่ เข้าสู่ระบบเพื่อผูกบัญชีอีกครั้ง", metadata_ui_operator_ambiguous: "พบหลายบัญชีงานเบื้องหลัง ให้เข้าสู่ระบบด้วยบัญชีที่ใช้จัดการ Library" })[error.message] || error.message;
+      say("loginMessage", message, "error"); syncControls();
+    }
   };
   $("logout").onclick = () => work("logout", "กำลังออกจากระบบ…", async () => {
     let revoked = true;
@@ -938,7 +978,7 @@
     $("sourceCount").textContent = policy?.mappings?.some(mapping => !mapping.localSubpath) ? "ระบุโฟลเดอร์ย่อยของ Library ก่อน" : "ยังไม่ได้สแกน";
     $("automationAuto").checked = policy?.autoEnabled || false;
     $("automationInterval").value = policy?.intervalSeconds || 300;
-    $("automationPreference").value = policy?.sourcePreference || "review";
+    $("automationPreference").value = policy?.sourcePreference || "opf";
     $("automationPolicyDetails").open = !policy;
     $("automationMappings").replaceChildren();
     for (const path of library.paths || []) {
@@ -1135,7 +1175,7 @@
   }, 5000);
   $("fileNotice").hidden = !isPreviewMode;
   $("environment").textContent = isPreviewMode ? "UI PREVIEW" : (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "LOCAL WORKSPACE" : "LAN WORKSPACE");
-  showPage(); syncControls(); loadFirstSyncStatus();
+  showPage(); syncControls(); loadFirstSyncStatus(); initializeSession();
 })();
 </script>
 </body>

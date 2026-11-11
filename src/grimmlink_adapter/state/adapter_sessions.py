@@ -21,6 +21,7 @@ class AdapterSession:
     expires_at: datetime
     official_access_token: str | None = None
     official_refresh_token: str | None = None
+    scope: str = "api"
 
     def __repr__(self) -> str:
         return (
@@ -52,12 +53,13 @@ class AdapterSessionStore:
     @classmethod
     async def create_official(
         cls, username: str, user_id: int, access_token: str, refresh_token: str | None,
+        *, scope: str = "api",
     ) -> tuple[str, AdapterSession]:
         token = secrets.token_urlsafe(32)
         session = AdapterSession(
             username, None, user_id,
             datetime.now(UTC) + timedelta(seconds=cls.DEFAULT_TTL_SECONDS),
-            access_token, refresh_token,
+            access_token, refresh_token, scope,
         )
         async with cls._lock:
             cls._purge_expired()

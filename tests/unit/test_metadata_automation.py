@@ -14,12 +14,18 @@ from grimmlink_adapter.config import settings
 from grimmlink_adapter.models.automation import LibraryPolicy
 from grimmlink_adapter.models.official import OfficialLoginResponse
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
-from grimmlink_adapter.official.exceptions import OfficialBadResponseError
+from grimmlink_adapter.official.exceptions import (
+    OfficialBadResponseError,
+    OfficialTimeoutError,
+    OfficialTransportError,
+)
 from grimmlink_adapter.security.auth_extractor import ClientCredentials, require_v2_credentials
 from grimmlink_adapter.security.metadata_vault import metadata_cipher
 from grimmlink_adapter.services.metadata_automation import (
     MetadataAutomation,
     MetadataBlocked,
+    _is_transient_upstream_error,
+    _upstream_retry_delay,
     check_storage,
     inspect_sources,
     mapped_book,
@@ -32,6 +38,30 @@ from grimmlink_adapter.services.opf_ingestion import OPFIngestionService
 from grimmlink_adapter.state.database import get_db_path, set_db_path
 from grimmlink_adapter.state.metadata_automation import MetadataAutomationStore as Store
 from grimmlink_adapter.state.migrations import apply_migrations
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        OfficialTransportError("connection refused"),
+        OfficialTimeoutError("upstream timed out"),
+        OfficialBadResponseError("upstream unavailable", status_code=503),
+    ],
+)
+def test_metadata_worker_recognizes_transient_upstream_failures(error: Exception) -> None:
+    assert _is_transient_upstream_error(error)
+
+
+def test_metadata_worker_does_not_retry_permanent_upstream_response() -> None:
+    assert not _is_transient_upstream_error(OfficialBadResponseError("bad request", status_code=400))
+
+
+@pytest.mark.parametrize(
+    ("attempts", "expected"),
+    [(0, 30), (1, 60), (2, 120), (3, 240), (4, 480), (5, 900), (8, 900)],
+)
+def test_upstream_retry_delay_grows_and_is_capped(attempts: int, expected: int) -> None:
+    assert _upstream_retry_delay(attempts) == expected
 
 
 @pytest_asyncio.fixture
@@ -192,10 +222,12 @@ async def test_local_grimmory_login_connects_background_without_kosync(metadata_
     assert login.status_code == 200
     token = login.json()["accessToken"]
     session = await AdapterSessionStore.get(token)
-    assert session is not None and session.md5_key is None
+    assert session is not None and session.md5_key is None and session.scope == "metadata_ui"
     headers = {"Authorization": f"Bearer {token}"}
     libraries = await test_client.get(base + "/local/automation/libraries", headers=headers)
     assert libraries.status_code == 200
+    reader_api = await test_client.get(base + "/books/resolve?hash=reader-hash", headers=headers)
+    assert reader_api.status_code == 403
     bound = await test_client.put(base + "/local/automation/account", headers=headers)
     assert bound.status_code == 200
     encrypted = (await Store.query("SELECT encrypted_credentials FROM metadata_accounts WHERE user_id=7"))[0]["encrypted_credentials"]
@@ -204,6 +236,36 @@ async def test_local_grimmory_login_connects_background_without_kosync(metadata_
     assert saved == {"username": "web-user", "access": "web-access", "refresh": "web-refresh", "source": "direct"}
     assert (await test_client.delete(base + "/auth/session", headers=headers)).status_code == 204
     assert await AdapterSessionStore.get(token) is None
+
+
+@pytest.mark.asyncio
+async def test_local_ui_auto_session_uses_bound_account_and_cannot_access_reader_api(metadata_db, test_client, monkeypatch: pytest.MonkeyPatch):
+    import grimmlink_adapter.api.v2 as v2_api
+    from grimmlink_adapter.state.adapter_sessions import AdapterSessionStore
+
+    encrypted = metadata_cipher().encrypt(json.dumps({
+        "username": "background-user", "access": "stored-access", "refresh": "stored-refresh", "source": "direct",
+    }).encode()).decode()
+    await Store.execute(
+        "INSERT INTO metadata_accounts(server,user_id,encrypted_credentials) VALUES(?,?,?)",
+        (server_key(), 7, encrypted),
+    )
+    monkeypatch.setattr(v2_api.metadata_automation, "bearer", AsyncMock(return_value="fresh-access"))
+    monkeypatch.setattr(OfficialGrimmoryClient, "get_current_user", AsyncMock(return_value={"id": 7, "username": "background-user"}))
+    monkeypatch.setattr(OfficialGrimmoryClient, "get_libraries", AsyncMock(return_value=[]))
+
+    base = "/api/grimmlink/v2"
+    login = await test_client.post(base + "/local/auth/session/auto")
+    assert login.status_code == 200
+    token = login.json()["accessToken"]
+    session = await AdapterSessionStore.get(token)
+    assert session is not None and session.scope == "metadata_ui"
+    headers = {"Authorization": f"Bearer {token}"}
+    libraries = await test_client.get(base + "/local/automation/libraries", headers=headers)
+    assert libraries.status_code == 200
+    reader_api = await test_client.get(base + "/books/resolve?hash=reader-hash", headers=headers)
+    assert reader_api.status_code == 403
+    await AdapterSessionStore.revoke(token)
 
 
 @pytest.mark.asyncio
@@ -219,6 +281,55 @@ async def test_linked_tokens_are_encrypted_and_legacy_rows_upgrade(metadata_db):
     await LinkedAccountStore.encrypt_existing()
     assert (await LinkedAccountStore.get(server_key(), "1")).access_token == "legacy-access"
     assert (await Store.query("SELECT access_token FROM linked_accounts"))[0]["access_token"].startswith("encrypted:v1:")
+
+
+@pytest.mark.asyncio
+async def test_reader_key_auto_links_to_same_bound_metadata_account(metadata_db, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from grimmlink_adapter.state.linked_accounts import LinkedAccountStore, digest_md5_key
+
+    payload = {"username": "reader", "access": "fresh-access", "refresh": "fresh-refresh", "source": "direct"}
+    encrypted = metadata_cipher().encrypt(json.dumps(payload).encode()).decode()
+    await Store.execute(
+        "INSERT INTO metadata_accounts(server,user_id,encrypted_credentials) VALUES(?,?,?)",
+        (server_key(), 17, encrypted),
+    )
+    monkeypatch.setattr(MetadataAutomation, "bearer", AsyncMock(return_value="fresh-access"))
+    monkeypatch.setattr(
+        OfficialGrimmoryClient,
+        "get_current_user",
+        AsyncMock(return_value={"id": 17, "username": "reader"}),
+    )
+
+    linked_user = await MetadataAutomation().link_reader_account("reader", "verified-md5")
+
+    assert linked_user == 17
+    linked = await LinkedAccountStore.get(server_key(), "17")
+    assert linked is not None
+    assert linked.matches("reader", "verified-md5")
+    assert linked.md5_key_digest == digest_md5_key("verified-md5")
+    saved = await Store.query(
+        "SELECT encrypted_credentials FROM metadata_accounts WHERE server=? AND user_id=?",
+        (server_key(), 17),
+    )
+    upgraded = json.loads(metadata_cipher().decrypt(saved[0]["encrypted_credentials"].encode()))
+    assert upgraded["source"] == "linked"
+
+
+@pytest.mark.asyncio
+async def test_reader_key_auto_link_requires_exact_metadata_username(metadata_db, monkeypatch):
+    payload = {"username": "different-user", "access": "access", "refresh": "refresh", "source": "direct"}
+    encrypted = metadata_cipher().encrypt(json.dumps(payload).encode()).decode()
+    await Store.execute(
+        "INSERT INTO metadata_accounts(server,user_id,encrypted_credentials) VALUES(?,?,?)",
+        (server_key(), 17, encrypted),
+    )
+
+    linked_user = await MetadataAutomation().link_reader_account("reader", "verified-md5")
+
+    assert linked_user is None
+    assert await Store.query("SELECT user_id FROM linked_accounts") == []
 
 
 @pytest.mark.asyncio
@@ -357,6 +468,38 @@ async def test_sources_wait_until_book_is_in_library(configured_book):
     wrong["primaryFile"]["filePath"] = "/elsewhere/Book.epub"
     with pytest.raises(ValueError):
         inspect_sources(wrong, library, policy)
+
+
+def test_source_preference_uses_one_opf_then_json_fallback(tmp_path):
+    import json
+
+    from grimmlink_adapter.models.automation import LibraryPolicy
+
+    book_path = tmp_path / "Book.pdf"
+    book_path.write_bytes(b"pdf")
+    (tmp_path / "Book.opf").write_text(
+        '<package><metadata><title>OPF title</title></metadata></package>', encoding="utf-8",
+    )
+    if not (tmp_path / "Book.OPF").exists():
+        (tmp_path / "Book.OPF").write_text(
+            '<package><metadata><title>Second OPF title</title></metadata></package>', encoding="utf-8",
+        )
+    (tmp_path / "Book.metadata.json").write_text(
+        json.dumps({"metadata": {"title": "JSON title"}}), encoding="utf-8",
+    )
+    policy = LibraryPolicy(mappings=[{"libraryPathId": 1, "rootIndex": 0, "localSubpath": ".", "marker": ".nas"}])
+    book = {"id": 7, "libraryPath": {"id": 1}, "primaryFile": {"id": 8, "filePath": "/books/Book.pdf", "fileName": "Book.pdf"}}
+    library = {"paths": [{"id": 1, "path": "/books"}]}
+
+    selected = inspect_sources(book, library, policy, roots={0: tmp_path})
+
+    assert Path(selected["source_path"]).name == "Book.opf"
+    assert selected["source"]["title"] == "OPF title"
+
+    (tmp_path / "Book.opf").write_text("malformed", encoding="utf-8")
+    fallback = inspect_sources(book, library, policy, roots={0: tmp_path})
+    assert Path(fallback["source_path"]).name == "Book.metadata.json"
+    assert fallback["source"]["title"] == "JSON title"
 
 
 @pytest.mark.asyncio

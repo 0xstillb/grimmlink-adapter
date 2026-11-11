@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from grimmlink_adapter import __version__
 from grimmlink_adapter.api.router import api_router, api_v2_router
 from grimmlink_adapter.config import settings
+from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.security.masking import mask_secret, setup_secure_logging
 from grimmlink_adapter.services.mdns import MDNSAdvertiser
 from grimmlink_adapter.services.metadata_automation import metadata_automation
@@ -84,10 +85,29 @@ def create_app() -> FastAPI:
     # Healthcheck
     @application.get("/healthcheck", tags=["Health"])
     async def healthcheck() -> dict[str, str]:
+        """Local liveness probe; intentionally independent from Grimmory."""
         return {
             "status": "ok",
             "version": __version__,
         }
+
+    @application.get("/readyz", tags=["Health"])
+    async def readiness() -> JSONResponse:
+        """Read-only readiness probe that also requires Official Grimmory."""
+        try:
+            async with OfficialGrimmoryClient() as client:
+                await client.check_health()
+        except Exception as exc:
+            # Keep details and upstream response bodies out of this unauthenticated probe.
+            logger.warning("Readiness check failed (%s)", type(exc).__name__)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "not_ready", "upstream": "grimmory_unavailable", "version": __version__},
+            )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "ready", "upstream": "ok", "version": __version__},
+        )
 
     @application.get("/", include_in_schema=False)
     async def home() -> RedirectResponse:

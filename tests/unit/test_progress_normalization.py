@@ -1,5 +1,6 @@
 """Session 06 progress normalization and conflict coverage."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -356,6 +357,28 @@ def test_book_api_percentages_are_already_display_units() -> None:
     )
     assert snapshot is not None
     assert snapshot.display_percent == pytest.approx(0.3303)
+
+
+def test_book_api_projection_keeps_device_for_the_same_cached_progress_event() -> None:
+    updated_at = datetime(2026, 11, 10, 12, 30, tzinfo=UTC)
+    prior = ProgressSnapshot(
+        book_hash="epub-same-event", book_id=42, book_file_id=101, format="EPUB",
+        cfi="epubcfi(/6/2[chapter]!/4/2/1:7)", href="chapter.xhtml",
+        display_percent=25.0, device="Readest Desktop", device_id="readest-device-1",
+        timestamp_epoch=int(updated_at.timestamp()), updated_at=updated_at,
+    )
+    snapshot = ProgressService._book_progress_snapshot(
+        {
+            "lastReadTime": updated_at.isoformat(),
+            "epubProgress": {
+                "cfi": prior.cfi, "href": prior.href, "percentage": 25.0,
+            },
+        },
+        "epub-same-event", 42, 101, prior,
+    )
+    assert snapshot is not None
+    assert snapshot.device_id == "readest-device-1"
+    assert snapshot.device == "Readest Desktop"
 
 
 def test_epub_projection_rejects_xpointer_and_accepts_cfi() -> None:

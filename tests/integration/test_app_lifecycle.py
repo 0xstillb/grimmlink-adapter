@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from grimmlink_adapter.main import create_app
+from grimmlink_adapter.official.exceptions import OfficialTransportError
 
 
 @pytest.mark.asyncio
@@ -15,6 +16,52 @@ async def test_healthcheck_endpoint(test_client: AsyncClient) -> None:
     data = resp.json()
     assert data["status"] == "ok"
     assert "version" in data
+
+
+@pytest.mark.asyncio
+async def test_readiness_requires_official_grimmory_but_liveness_stays_up(
+    test_client: AsyncClient,
+) -> None:
+    class UnavailableClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def check_health(self):
+            raise OfficialTransportError("connection refused")
+
+    with patch("grimmlink_adapter.main.OfficialGrimmoryClient", return_value=UnavailableClient()):
+        ready = await test_client.get("/readyz")
+        live = await test_client.get("/healthcheck")
+
+    assert ready.status_code == 503
+    assert ready.json()["status"] == "not_ready"
+    assert ready.json()["upstream"] == "grimmory_unavailable"
+    assert live.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_readiness_returns_ready_when_official_grimmory_responds(
+    test_client: AsyncClient,
+) -> None:
+    class AvailableClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def check_health(self):
+            return {"status": "ok"}
+
+    with patch("grimmlink_adapter.main.OfficialGrimmoryClient", return_value=AvailableClient()):
+        ready = await test_client.get("/readyz")
+
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+    assert ready.json()["upstream"] == "ok"
 
 
 @pytest.mark.asyncio

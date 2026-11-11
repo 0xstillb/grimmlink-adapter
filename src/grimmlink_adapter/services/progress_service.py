@@ -349,6 +349,25 @@ class ProgressService:
                 raw["bookFileId"] = book_file_id
         snapshot = snapshot_from_official(raw, requested_hash)
         if snapshot is not None:
+            # The Book API projection omits reader/device identity. Preserve a
+            # cached identity only when time and native locator still describe
+            # the exact same progress event; otherwise it may belong to an
+            # older device write and must not suppress a real conflict.
+            same_cached_event = bool(
+                prior is not None
+                and snapshot.timestamp_epoch is not None
+                and prior.timestamp_epoch == snapshot.timestamp_epoch
+                and (
+                    (snapshot.cfi is not None and snapshot.cfi == prior.cfi)
+                    or (
+                        snapshot.current_page is not None
+                        and snapshot.current_page == prior.current_page
+                    )
+                )
+            )
+            if same_cached_event and prior is not None:
+                snapshot.device = prior.device
+                snapshot.device_id = prior.device_id
             # App/WebUI DTO percentages are already 0..100 display values;
             # fraction conversion is reserved for the KOReader endpoint.
             if isinstance(pdf, dict) and pdf.get("percentage") is not None:
