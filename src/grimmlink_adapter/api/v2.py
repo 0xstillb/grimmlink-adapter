@@ -43,7 +43,6 @@ from grimmlink_adapter.security.auth_extractor import (
     require_v2_credentials,
 )
 from grimmlink_adapter.security.metadata_vault import metadata_cipher
-from grimmlink_adapter.services.auth_service import AuthService
 from grimmlink_adapter.services.diagnostics import collect_diagnostics
 from grimmlink_adapter.services.metadata_automation import (
     MetadataBlocked,
@@ -77,20 +76,18 @@ _shelf_service = ShelfService()
 
 async def _issue_session(username: str, md5_key: str) -> V2SessionResponse:
     creds = ClientCredentials(username=username, md5_key=md5_key)
-    auth = AuthService()
-    try:
-        identity = await auth.authorize_client(creds)
-        bearer = await get_official_bearer(creds)
-        if getattr(bearer, "user_id", None) != identity.userId:
-            raise HTTPException(status_code=401, detail="Linked Grimmory identity does not match KOSync user.")
-        token, session = await AdapterSessionStore.create(username, md5_key, identity.userId)
-    finally:
-        await auth.official_client.aclose()
+    # The resolver checks the reader credentials and verifies the linked
+    # Grimmory account belongs to the same user before returning its identity.
+    bearer = await get_official_bearer(creds)
+    user_id = getattr(bearer, "user_id", None)
+    if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="Linked Grimmory identity is unavailable.")
+    token, session = await AdapterSessionStore.create(username, md5_key, user_id)
     return V2SessionResponse(
         accessToken=token,
         expiresAt=session.expires_at,
-        username=identity.username,
-        userId=identity.userId,
+        username=username,
+        userId=user_id,
     )
 
 
