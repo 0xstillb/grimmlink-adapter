@@ -1,14 +1,17 @@
 # Adapter-only Pi deployment. Place a private .env beside this file.
 # The NAS host mount and read-only Grimmory DB account already exist on the Pi.
+# Host networking lets LAN and Tailscale clients reach the Adapter; restrict
+# access with the Pi firewall and do not forward port 8085 from the Internet.
 services:
   grimmlink-adapter:
-    image: ghcr.io/0xstillb/grimmlink-adapter:0.1.18
+    image: ${GRIMMLINK_ADAPTER_IMAGE:-ghcr.io/0xstillb/grimmlink-adapter:latest}
+    pull_policy: always
     container_name: grimmlink-adapter
     restart: unless-stopped
     network_mode: host
     env_file: .env
     environment:
-      ADAPTER_HOST: ${LAN_IP:?Set LAN_IP to the Pi LAN address}
+      ADAPTER_HOST: ${ADAPTER_HOST:-0.0.0.0}
       ADAPTER_PORT: "8085"
       GRIMMORY_BASE_URL: http://${LAN_IP}:6060
       GRIMMORY_DB_ENABLED: "true"
