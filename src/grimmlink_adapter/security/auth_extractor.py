@@ -54,7 +54,15 @@ async def _official_session_credentials(token: str, session: AdapterSession) -> 
                         await AdapterSessionStore.update_official(token, session, access, refresh)
                     except ValueError as exc:
                         raise HTTPException(status_code=401, detail="Adapter session is invalid or expired.") from exc
-                return ClientCredentials(username=session.username, bearer_token=access)
+                # The upstream profile was just checked against this session.
+                # Carry that verified identity within this request so downstream
+                # services do not issue the same profile request a second time.
+                from grimmlink_adapter.services.request_auth import VerifiedBearer
+
+                return ClientCredentials(
+                    username=session.username,
+                    bearer_token=VerifiedBearer(access, session.user_id),
+                )
         except (OfficialAuthError, OfficialPermissionError) as exc:
             raise HTTPException(status_code=401, detail="Grimmory session expired. Sign in again.") from exc
         except OfficialClientError as exc:
@@ -105,7 +113,7 @@ async def get_client_credentials(
             return ClientCredentials(
                 username=session.username,
                 md5_key=session.md5_key,
-                bearer_token=str(official_bearer),
+                bearer_token=official_bearer,
             )
     creds = ClientCredentials(username=x_auth_user, md5_key=x_auth_key, bearer_token=bearer_token)
     return creds
@@ -165,5 +173,5 @@ async def require_v2_credentials(
     return ClientCredentials(
         username=adapter_session.username,
         md5_key=adapter_session.md5_key,
-        bearer_token=str(official_bearer),
+        bearer_token=official_bearer,
     )

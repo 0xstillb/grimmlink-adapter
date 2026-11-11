@@ -662,6 +662,45 @@ class MetadataSyncStore:
         return None
 
     @staticmethod
+    async def get_applied_by_official_ids(
+        owner_key: str, book_id: int, official_ids: set[int],
+    ) -> dict[int, MetadataDedupeRecord]:
+        """Fetch the latest record per Official ID with bounded SQLite batches."""
+        if not official_ids:
+            return {}
+        ids = sorted(official_ids)
+        records: dict[int, MetadataDedupeRecord] = {}
+        async with get_connection() as conn:
+            for start in range(0, len(ids), 400):
+                chunk = ids[start:start + 400]
+                placeholders = ",".join("?" for _ in chunk)
+                async with conn.execute(
+                    f"""
+                    SELECT owner_key, book_id, item_type, dedupe_key, content_hash, device,
+                           device_id, source_scale, source_value, official_value, official_id,
+                           payload_json, is_deleted, synced_at
+                    FROM metadata_applied_history
+                    WHERE owner_key = ? AND book_id = ? AND official_id IN ({placeholders})
+                    ORDER BY synced_at DESC
+                    """,
+                    (owner_key, book_id, *chunk),
+                ) as cursor:
+                    for row in await cursor.fetchall():
+                        official_id = int(row["official_id"])
+                        if official_id in records:
+                            continue
+                        records[official_id] = MetadataDedupeRecord(
+                            owner_key=row["owner_key"], book_id=row["book_id"],
+                            item_type=row["item_type"], dedupe_key=row["dedupe_key"],
+                            content_hash=row["content_hash"], device=row["device"],
+                            device_id=row["device_id"], source_scale=row["source_scale"],
+                            source_value=row["source_value"], official_value=row["official_value"],
+                            official_id=official_id, payload_json=row["payload_json"],
+                            is_deleted=bool(row["is_deleted"]), synced_at=row["synced_at"],
+                        )
+        return records
+
+    @staticmethod
     async def record_applied(record: MetadataDedupeRecord) -> None:
         async with get_connection() as conn:
             await conn.execute(

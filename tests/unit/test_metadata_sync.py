@@ -58,6 +58,33 @@ def verified_bearer() -> VerifiedBearer:
 # ============================================================================
 
 
+@pytest.mark.asyncio
+async def test_bulk_official_lookup_preserves_scope_latest_and_deleted_records() -> None:
+    async with get_connection() as conn:
+        await conn.executemany(
+            """INSERT INTO metadata_applied_history
+               (owner_key, book_id, item_type, dedupe_key, content_hash, official_id, is_deleted, synced_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            [
+                ("user-a", 10, "bookmark", f"key-{i}", "hash", i, 0, "2026-01-01 00:00:00")
+                for i in range(1, 406)
+            ] + [
+                ("user-a", 10, "bookmark", "latest", "hash", 1, 1, "2026-01-02 00:00:00"),
+                ("user-b", 10, "bookmark", "other-owner", "hash", 1, 0, "2026-01-03 00:00:00"),
+                ("user-a", 11, "bookmark", "other-book", "hash", 1, 0, "2026-01-03 00:00:00"),
+            ],
+        )
+        await conn.commit()
+    ids = set(range(1, 406))
+    result = await MetadataSyncStore.get_applied_by_official_ids("user-a", 10, ids)
+    assert len(result) == 405
+    assert result[1].dedupe_key == "latest"
+    assert result[1].is_deleted is True
+    assert result[405].dedupe_key == "key-405"
+    assert result[1] == await MetadataSyncStore.get_applied_by_official_id("user-a", 10, 1)
+    assert await MetadataSyncStore.get_applied_by_official_ids("user-a", 10, set()) == {}
+
+
 def test_rating_normalization_helper() -> None:
     # 1-10 scale maps to 1-5
     assert normalize_rating(10, source_scale=10) == 5
@@ -759,6 +786,10 @@ async def test_pull_filters_mapped_bookmarks_and_annotations_by_type(
             annotations=[GrimmlinkAnnotationPayload(dedupeKey="ann:filter", text="Highlight")],
         ),
         creds=mock_creds,
+    )
+    monkeypatch.setattr(
+        MetadataSyncStore, "get_applied_by_official_id",
+        AsyncMock(side_effect=AssertionError("per-item lookup should not be used")),
     )
     bookmarks = await service.pull_metadata(
         book_id=78, item_type="bookmark", cursor="1970-01-01T00:00:00Z", creds=mock_creds,

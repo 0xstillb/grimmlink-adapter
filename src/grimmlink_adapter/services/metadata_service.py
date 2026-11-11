@@ -944,12 +944,15 @@ class MetadataService:
                 int(obm["id"]) for obm in official_bms
                 if obm.get("id") is not None and str(obm.get("id")).isdigit()
             }
+            history_by_id = await MetadataSyncStore.get_applied_by_official_ids(
+                owner_key, resolved_book_id, official_ids,
+            )
             for obm in official_bms:
                 obm_id = obm.get("id")
                 if not obm_id:
                     continue
 
-                rec = await MetadataSyncStore.get_applied_by_official_id(owner_key, resolved_book_id, obm_id)
+                rec = history_by_id.get(int(obm_id)) if str(obm_id).isdigit() else None
                 if rec:
                     if type_filter and rec.item_type != type_filter:
                         continue

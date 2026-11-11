@@ -21,6 +21,12 @@ class VerifiedBearer(str):
 
 async def get_official_bearer(creds: ClientCredentials) -> VerifiedBearer:
     """Verify incoming identities and use a linked JWT for MD5-only requests."""
+    # Only request-internal session resolution creates this marker, after
+    # checking the user against Grimmory. Raw client bearer strings still take
+    # the full authorization path below on every request.
+    if isinstance(creds.bearer_token, VerifiedBearer):
+        return creds.bearer_token
+
     from grimmlink_adapter.config import settings
 
     auth = AuthService()
