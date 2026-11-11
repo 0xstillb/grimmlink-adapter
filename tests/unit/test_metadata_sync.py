@@ -739,6 +739,38 @@ async def test_pull_uses_fresh_official_fields_and_preserves_local_unsupported_f
 
 
 @pytest.mark.asyncio
+async def test_pull_filters_mapped_bookmarks_and_annotations_by_type(
+    mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.metadata_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    client = OfficialGrimmoryClient()
+    client.create_bookmark = AsyncMock(side_effect=[{"id": 781}, {"id": 782}])  # type: ignore[method-assign]
+    client.get_bookmarks_for_book = AsyncMock(return_value=[  # type: ignore[method-assign]
+        {"id": 781}, {"id": 782},
+    ])
+    service = MetadataService(official_client=client)
+    await service.sync_metadata(
+        GrimmlinkMetadataSyncRequest(
+            bookId=78,
+            bookmarks=[GrimmlinkBookmarkPayload(dedupeKey="bm:filter", title="Bookmark")],
+            annotations=[GrimmlinkAnnotationPayload(dedupeKey="ann:filter", text="Highlight")],
+        ),
+        creds=mock_creds,
+    )
+    bookmarks = await service.pull_metadata(
+        book_id=78, item_type="bookmark", cursor="1970-01-01T00:00:00Z", creds=mock_creds,
+    )
+    annotations = await service.pull_metadata(
+        book_id=78, item_type="annotation", cursor="1970-01-01T00:00:00Z", creds=mock_creds,
+    )
+    assert [item.type for item in bookmarks.items] == ["bookmark"]
+    assert [item.type for item in annotations.items] == ["annotation"]
+
+
+@pytest.mark.asyncio
 async def test_pull_emits_tombstone_for_confirmed_remote_deletion(
     mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
 ) -> None:

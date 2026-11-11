@@ -951,6 +951,8 @@ class MetadataService:
 
                 rec = await MetadataSyncStore.get_applied_by_official_id(owner_key, resolved_book_id, obm_id)
                 if rec:
+                    if type_filter and rec.item_type != type_filter:
+                        continue
                     payload_dict: dict[str, Any] = {}
                     if rec.payload_json:
                         with contextlib.suppress(json.JSONDecodeError):
