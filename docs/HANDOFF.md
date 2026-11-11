@@ -483,3 +483,15 @@ The adapter implements `GET/POST /api/grimmlink/v1/reading-sessions` and `POST /
 - **Implementer:** Gemini initial implementation; Sol gate fixes in this working tree.
 - **Rule:** No merge until the corrected diff passes final review.
 - **Current Status:** Gate findings addressed and tests green; no merge or commit performed. Safety tradeoff: ambiguous or absent upstream confirmation leaves `PENDING` rather than risking duplicate replay.
+
+---
+
+## 12. 2026-11-11 — Upstream latency and concurrency
+
+- Replaced the global credential lock with bounded-lifetime server/user locks shared by Reader and metadata refresh paths. Valid Reader/linked-account tokens are still verified on every request, concurrently; refresh reloads the latest stored credentials under the account lock.
+- Application lifespan now owns shared HTTP transport pools. Credentials, cookies and headers remain client-local; shutdown closes pooled resources even if stopping the metadata worker fails.
+- Added a configurable 25-second upstream budget shared across one API request's auth, calls, backoff and refresh waits. Streamed file bodies retain idle timeouts. Writes are never automatically replayed, and existing outbox/reconciliation behavior remains intact.
+- Coalesced only overlapping bookmark reads for the same server/TLS/book/token. No completed-result cache; callers receive independent copies, cancellation is isolated, and bookmark writes invalidate in-flight sharing before and after dispatch.
+- Added request timing summaries for auth, lock wait, upstream and SQLite scopes using route templates without credentials or book data. Configuration and operational limits: [UPSTREAM_PERFORMANCE.md](UPSTREAM_PERFORMANCE.md).
+- Validation: complete pytest suite **396 passed**, one pre-existing Starlette deprecation warning; `ruff check src tests` passed; `mypy src` passed for 65 source files; `git diff --check` passed. Tests ran outside the Windows sandbox because its network restrictions prevented asyncio's local socketpair from initializing.
+- Verification boundary: source/unit/integration checks only. This change has not been deployed to the Pi or timed with a real Reader. Follow-up deployment checks: simultaneous Reader sync, PDF/EPUB bookmark create/edit/delete, long download, restart and timing comparison. User requested improvement and commit; no merge or deployment is part of this change.

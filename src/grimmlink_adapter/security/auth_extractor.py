@@ -5,10 +5,55 @@ from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
+from grimmlink_adapter.config import settings
+from grimmlink_adapter.performance import measure
 from grimmlink_adapter.state.adapter_sessions import AdapterSession, AdapterSessionStore
 
 
 async def _official_session_credentials(token: str, session: AdapterSession) -> "ClientCredentials":
+    """Verify valid sessions concurrently; lock only the refresh fallback."""
+    from grimmlink_adapter.official.auth import parse_jwt_expiry
+    from grimmlink_adapter.official.client import OfficialGrimmoryClient
+    from grimmlink_adapter.official.exceptions import (
+        OfficialAuthError,
+        OfficialClientError,
+        OfficialPermissionError,
+    )
+    from grimmlink_adapter.services.request_auth import VerifiedBearer
+
+    with measure("auth"):
+        try:
+            current = await AdapterSessionStore.get(token)
+            if current is None or not current.official_access_token:
+                raise HTTPException(status_code=401, detail="Adapter session is invalid or expired.")
+            session = current
+            access = session.official_access_token
+            assert access is not None
+            expiry = parse_jwt_expiry(access)
+            rejected = None
+            if expiry is None or expiry >= time.time() + 60:
+                async with OfficialGrimmoryClient() as client:
+                    try:
+                        profile = await client.get_current_user(access)
+                    except (OfficialAuthError, OfficialPermissionError):
+                        rejected = access
+                    else:
+                        if str(profile.get("id", profile.get("userId"))) != str(session.user_id):
+                            raise HTTPException(status_code=401, detail="Adapter session identity changed.")
+                        if await AdapterSessionStore.get(token) is None:
+                            raise HTTPException(status_code=401, detail="Adapter session is invalid or expired.")
+                        return ClientCredentials(
+                            username=session.username,
+                            bearer_token=VerifiedBearer(access, session.user_id),
+                        )
+            return await _refresh_official_session_credentials(token, session, rejected)
+        except OfficialClientError as exc:
+            raise HTTPException(status_code=502, detail="Grimmory authentication is unavailable.") from exc
+
+
+async def _refresh_official_session_credentials(
+    token: str, session: AdapterSession, rejected: str | None,
+) -> "ClientCredentials":
     from grimmlink_adapter.official.auth import parse_jwt_expiry
     from grimmlink_adapter.official.client import OfficialGrimmoryClient
     from grimmlink_adapter.official.exceptions import (
@@ -18,7 +63,7 @@ async def _official_session_credentials(token: str, session: AdapterSession) -> 
     )
     from grimmlink_adapter.security.account_locks import credential_refresh_lock
 
-    async with credential_refresh_lock:
+    async with credential_refresh_lock(settings.GRIMMORY_BASE_URL, session.user_id):
         current = await AdapterSessionStore.get(token)
         if current is None or not current.official_access_token:
             raise HTTPException(status_code=401, detail="Adapter session is invalid or expired.")
@@ -34,7 +79,7 @@ async def _official_session_credentials(token: str, session: AdapterSession) -> 
                 assert access is not None
                 refresh = session.official_refresh_token
                 expiry = parse_jwt_expiry(access)
-                if expiry is not None and expiry < time.time() + 60:
+                if access == rejected or (expiry is not None and expiry < time.time() + 60):
                     if not refresh:
                         raise HTTPException(status_code=401, detail="Grimmory session expired. Sign in again.")
                     updated = await client.refresh_token()

@@ -15,8 +15,10 @@ Invariants:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any, Literal, cast, overload
 from urllib.parse import parse_qs, urlsplit
@@ -69,6 +71,8 @@ from grimmlink_adapter.official.exceptions import (
     OfficialTimeoutError,
     OfficialTransportError,
 )
+from grimmlink_adapter.official.runtime import current_runtime
+from grimmlink_adapter.performance import deadline, measure, remaining_budget
 from grimmlink_adapter.security.masking import mask_secret, redact_headers
 
 logger = logging.getLogger(__name__)
@@ -135,10 +139,12 @@ class OfficialGrimmoryClient:
         if self._external_client is not None:
             return self._external_client
         if self._internal_client is None or self._internal_client.is_closed:
+            runtime = current_runtime()
             self._internal_client = httpx.AsyncClient(
                 base_url=self.base_url,
                 timeout=self.timeout_config,
                 verify=self.ssl_verify,
+                transport=runtime.transport(self.base_url, self.ssl_verify) if runtime else None,
             )
         return self._internal_client
 
@@ -420,7 +426,30 @@ class OfficialGrimmoryClient:
             _is_401_retry=_is_401_retry,
         )
 
-    async def _send_request(
+    async def _send_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Bound retries/refresh by the remaining API budget, including backoff."""
+        budget = min(remaining_budget(), settings.OFFICIAL_CLIENT_TOTAL_TIMEOUT)
+        if budget <= 0:
+            raise OfficialTimeoutError("Total upstream request budget exhausted", method=method, url=path)
+        end_token = deadline.set(time.monotonic() + budget)
+        runtime = current_runtime()
+        mutation = method.upper() not in RETRYABLE_METHODS and path.startswith("/api/v1/bookmarks")
+        if runtime and mutation:
+            runtime.invalidate_bookmarks(self.base_url)
+        try:
+            with measure("upstream"):
+                async with asyncio.timeout(budget):
+                    return await self._send_request_attempts(method, path, **kwargs)
+        except TimeoutError as exc:
+            raise OfficialTimeoutError(
+                "Total upstream request budget exhausted", method=method, url=path,
+            ) from exc
+        finally:
+            if runtime and mutation:
+                runtime.invalidate_bookmarks(self.base_url)
+            deadline.reset(end_token)
+
+    async def _send_request_attempts(
         self,
         method: str,
         path: str,
@@ -473,8 +502,10 @@ class OfficialGrimmoryClient:
                 # Error bodies must be consumed and streaming connections closed before
                 # inspecting text, raising, or retrying.
                 if stream and resp.status_code >= 400:
-                    await resp.aread()
-                    await resp.aclose()
+                    try:
+                        await resp.aread()
+                    finally:
+                        await resp.aclose()
 
                 # Retry transient failures only for methods safe to replay.
                 if resp.status_code in TRANSIENT_STATUS_CODES:
@@ -1368,6 +1399,24 @@ class OfficialGrimmoryClient:
         return int(rating) if rating is not None else None
 
     async def get_bookmarks_for_book(
+        self, book_id: int, bearer_token: str,
+    ) -> list[dict[str, Any]]:
+        runtime = current_runtime()
+        if runtime is None or self._external_client is not None:
+            return await self._fetch_bookmarks_for_book(book_id, bearer_token)
+        key = (
+            self.base_url, self.ssl_verify, book_id,
+            hashlib.sha256(bearer_token.encode()).digest(),
+        )
+        try:
+            async with asyncio.timeout(remaining_budget()):
+                return await runtime.read_bookmarks(
+                    key, lambda: self._fetch_bookmarks_for_book(book_id, bearer_token),
+                )
+        except TimeoutError as exc:
+            raise OfficialTimeoutError("Upstream bookmark read budget exhausted") from exc
+
+    async def _fetch_bookmarks_for_book(
         self, book_id: int, bearer_token: str,
     ) -> list[dict[str, Any]]:
         """Fetch all bookmarks for a book from Official Grimmory."""

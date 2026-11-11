@@ -374,7 +374,7 @@ class MetadataAutomation:
         return user_id
 
     async def bearer(self, user_id: int) -> str:
-        async with credential_refresh_lock:
+        async with credential_refresh_lock(server_key(), user_id):
             return await self._bearer(user_id)
 
     async def _bearer(self, user_id: int) -> str:

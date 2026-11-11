@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
 
     # Upstream HTTP Client options
+    OFFICIAL_CLIENT_TOTAL_TIMEOUT: float = Field(
+        default=25.0, gt=0, description="Shared upstream budget per API request, including retries (seconds)"
+    )
+    OFFICIAL_CLIENT_MAX_CONNECTIONS: int = Field(
+        default=20, ge=1, description="Maximum shared upstream connections per server/TLS configuration"
+    )
+    SLOW_REQUEST_MS: float = Field(
+        default=1000.0, ge=0, description="Log request timings at INFO above this threshold; otherwise DEBUG"
+    )
     OFFICIAL_CLIENT_TIMEOUT: float = Field(
         default=15.0, description="HTTP client request timeout in seconds"
     )

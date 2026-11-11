@@ -8,6 +8,7 @@ from pathlib import Path
 import aiosqlite
 
 from grimmlink_adapter.config import settings
+from grimmlink_adapter.performance import measure
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ def set_db_path(path: Path) -> None:
 async def get_connection() -> AsyncGenerator[aiosqlite.Connection, None]:
     """Provide an async SQLite connection with WAL mode and row factory enabled."""
     db_file = get_db_path()
+    with measure("db"):
+        async with _connection(db_file) as conn:
+            yield conn
+
+
+@asynccontextmanager
+async def _connection(db_file: Path) -> AsyncGenerator[aiosqlite.Connection, None]:
     async with aiosqlite.connect(db_file) as conn:
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA journal_mode = WAL;")

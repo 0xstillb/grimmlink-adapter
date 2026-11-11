@@ -15,6 +15,7 @@ from grimmlink_adapter.official import (
     OfficialTimeoutError,
     OfficialTransportError,
 )
+from grimmlink_adapter.performance import measure
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
 from grimmlink_adapter.state.linked_accounts import LinkedAccountStore
 
@@ -28,6 +29,10 @@ class AuthService:
         self.official_client = official_client or OfficialGrimmoryClient()
 
     async def authorize_client(self, creds: ClientCredentials) -> GrimmlinkAuthResponse:
+        with measure("auth"):
+            return await self._authorize_client(creds)
+
+    async def _authorize_client(self, creds: ClientCredentials) -> GrimmlinkAuthResponse:
         """Validate client credentials against Official Grimmory.
 
         Rejects requests if credentials fail verification or upstream is unavailable.

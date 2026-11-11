@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 from grimmlink_adapter.official.auth import parse_jwt_expiry
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import OfficialAuthError, OfficialPermissionError
+from grimmlink_adapter.performance import measure
 from grimmlink_adapter.security.account_locks import credential_refresh_lock
 from grimmlink_adapter.state.linked_accounts import LinkedAccount, LinkedAccountStore
 
@@ -16,12 +19,29 @@ class LinkedAuthUnavailable(Exception):
 async def get_linked_bearer(
     server: str, user_id: str, username: str, md5_key: str,
 ) -> str:
-    async with credential_refresh_lock:
-        return await _get_linked_bearer(server, user_id, username, md5_key)
+    with measure("auth"):
+        account = await LinkedAccountStore.get(server, user_id)
+        if account is None or not account.matches(username, md5_key):
+            raise LinkedAuthUnavailable("Link this Grimmory account to use MD5-only book lookup")
+        expiry = parse_jwt_expiry(account.access_token)
+        rejected = None
+        if expiry is None or expiry >= time.time() + 60:
+            async with OfficialGrimmoryClient(base_url=server) as client:
+                try:
+                    profile = await client.get_current_user(account.access_token)
+                except (OfficialAuthError, OfficialPermissionError):
+                    rejected = account.access_token
+                else:
+                    profile_id = profile.get("id") or profile.get("userId")
+                    if str(profile_id) != user_id or profile.get("username") != username:
+                        raise LinkedAuthUnavailable("Linked account identity no longer matches KOReader user")
+                    return account.access_token
+        async with credential_refresh_lock(server, user_id):
+            return await _get_linked_bearer(server, user_id, username, md5_key, rejected)
 
 
 async def _get_linked_bearer(
-    server: str, user_id: str, username: str, md5_key: str,
+    server: str, user_id: str, username: str, md5_key: str, rejected: str | None = None,
 ) -> str:
     """Return a verified same-user token, refreshing it when needed."""
     account = await LinkedAccountStore.get(server, user_id)
@@ -36,7 +56,7 @@ async def _get_linked_bearer(
         )
         token = account.access_token
         expiry = parse_jwt_expiry(token)
-        if expiry is not None and client.jwt_auth is not None and client.jwt_auth.is_expired():
+        if token == rejected or (expiry is not None and expiry < time.time() + 60):
             token = await _refresh(client, account)
         try:
             profile = await client.get_current_user(token)

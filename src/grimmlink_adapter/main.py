@@ -12,6 +12,8 @@ from grimmlink_adapter import __version__
 from grimmlink_adapter.api.router import api_router, api_v2_router
 from grimmlink_adapter.config import settings
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
+from grimmlink_adapter.official.runtime import start_runtime, stop_runtime
+from grimmlink_adapter.performance import RequestTimingMiddleware
 from grimmlink_adapter.security.masking import mask_secret, setup_secure_logging
 from grimmlink_adapter.services.mdns import MDNSAdvertiser
 from grimmlink_adapter.services.metadata_automation import metadata_automation
@@ -44,12 +46,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.mdns_advertiser = mdns
 
     try:
+        await start_runtime()
         await metadata_automation.start()
         yield
     finally:
-        await metadata_automation.stop()
-        await mdns.stop()
-        app.state.mdns_advertiser = None
+        try:
+            await metadata_automation.stop()
+        finally:
+            try:
+                await stop_runtime()
+            finally:
+                await mdns.stop()
+                app.state.mdns_advertiser = None
 
     logger.info("Shutting down GrimmLink Adapter")
 
@@ -73,6 +81,8 @@ def create_app() -> FastAPI:
     )
 
     # Safe global exception handler redacting secrets from error messages
+    application.add_middleware(RequestTimingMiddleware)
+
     @application.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         sanitized_msg = mask_secret(str(exc))
