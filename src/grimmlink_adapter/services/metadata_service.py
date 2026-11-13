@@ -75,8 +75,9 @@ from grimmlink_adapter.models.internal import (
     OutboxAction,
 )
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
-from grimmlink_adapter.official.exceptions import OfficialTimeoutError
+from grimmlink_adapter.official.exceptions import OfficialBadResponseError, OfficialTimeoutError
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
+from grimmlink_adapter.services.prose_converter import prose_converter
 from grimmlink_adapter.services.request_auth import get_official_bearer
 from grimmlink_adapter.state.book_identity import BookIdentityStore
 from grimmlink_adapter.state.cache import MetadataSyncStore
@@ -1099,8 +1100,62 @@ class MetadataService:
                     )
                 )
 
+            # Keep tombstones replayable for every reader and for failed pulls.
+            # The cursor belongs to the reader; marking history deleted is not
+            # an acknowledgement that all readers have applied the deletion.
+            deleted_history = await MetadataSyncStore.list_applied_history(
+                owner_key, resolved_book_id, limit=100_000,
+                item_type=history_type, deleted_only=True,
+            )
+            try:
+                cursor_time = datetime.fromisoformat(effective_cursor.replace("Z", "+00:00")) if effective_cursor else None
+                if cursor_time and cursor_time.tzinfo is None:
+                    cursor_time = cursor_time.replace(tzinfo=UTC)
+            except ValueError:
+                cursor_time = None
+            for rec in deleted_history:
+                if rec.item_type not in ("bookmark", "annotation"):
+                    continue
+                deleted_at = rec.synced_at
+                if deleted_at.tzinfo is None:
+                    deleted_at = deleted_at.replace(tzinfo=UTC)
+                if cursor_time and deleted_at <= cursor_time:
+                    continue
+                items.append(GrimmlinkMetadataPullItem(
+                    id=rec.dedupe_key, type=rec.item_type, bookId=resolved_book_id,
+                    bookFileId=book_file_id, dedupeKey=rec.dedupe_key,
+                    contentHash=rec.content_hash, payload={"deleted": True},
+                    device="Grimmory Web", updatedAt=deleted_at.isoformat(),
+                ))
+
         items.sort(key=lambda item: (item.type, item.dedupeKey or item.id, item.id))
         page_items = items[page_offset:page_offset + limit_val]
+        if book_hash:
+            for item in page_items:
+                if item.type not in ("bookmark", "annotation") or not isinstance(item.payload, dict):
+                    continue
+                payload = item.payload
+                location = payload.get("location")
+                location = location if isinstance(location, dict) else {}
+                if payload.get("pos0") or location.get("pos0"):
+                    continue
+                cfi = payload.get("cfi") or location.get("cfi")
+                if not is_valid_cfi(cfi):
+                    continue
+                try:
+                    xpointer = await prose_converter.convert(book_hash, "cfi", cfi, creds)
+                except Exception as exc:  # Keep unrelated metadata in this page available.
+                    logger.warning("EPUB metadata CFI conversion unavailable: %s", type(exc).__name__)
+                    xpointer = None
+                if xpointer:
+                    payload["pos0"] = xpointer
+                    converted_location = dict(location)
+                    converted_location["pos0"] = xpointer
+                    payload["location"] = converted_location
+                    item.payload = payload
+                else:
+                    payload["positionConversionError"] = "epub_cfi_to_xpointer_failed"
+                    item.payload = payload
         has_more = page_offset + limit_val < len(items)
         if has_more:
             next_cursor = self._encode_page_cursor(
@@ -1182,20 +1237,27 @@ class MetadataService:
             page_number = payload.get("pageNumber")
             notes = payload.get("notes")
             color = payload.get("color")
-            existing_bms: list[dict[str, Any]] = []
-            if action.retry_count > 0:
+            async def find_exact_existing_bookmark() -> dict[str, Any] | None:
                 existing_bms = await self.official_client.get_bookmarks_for_book(
                     book_id, bearer_token
                 )
-            for e_bm in existing_bms:
-                if (
+                matches = [
+                    e_bm for e_bm in existing_bms
+                    if (
                     e_bm.get("title") == title
                     and e_bm.get("cfi") == cfi
                     and e_bm.get("pageNumber") == page_number
                     and e_bm.get("notes") == notes
                     and e_bm.get("color") == color
-                ):
-                    res = {"id": e_bm.get("id"), "status": "ALREADY_COMMITTED"}
+                    and e_bm.get("id") is not None
+                    )
+                ]
+                return matches[0] if len(matches) == 1 else None
+
+            if action.retry_count > 0:
+                existing = await find_exact_existing_bookmark()
+                if existing:
+                    res = {"id": existing.get("id"), "status": "ALREADY_COMMITTED"}
                     await IdempotencyManager.record_response(action.idempotency_key, action_type, 200, json.dumps(res))
                     return res
 
@@ -1208,6 +1270,21 @@ class MetadataService:
             except OfficialTimeoutError as exc:
                 logger.warning("Timeout during bookmark creation; action remains retryable: %s", exc)
                 raise
+            except OfficialBadResponseError as exc:
+                if exc.status_code != 409:
+                    raise
+                # Grimmory can reject a create when the same bookmark is
+                # already present (for example after an interrupted local sync
+                # lost its Adapter mapping). Adopt it only when exactly one
+                # upstream row matches every supported field; never guess.
+                existing = await find_exact_existing_bookmark()
+                if existing is None:
+                    raise
+                res = {"id": existing.get("id"), "status": "ALREADY_EXISTS"}
+                await IdempotencyManager.record_response(
+                    action.idempotency_key, action_type, 200, json.dumps(res)
+                )
+                return res
 
         elif action_type == "RATING_UPDATE":
             book_id_raw = payload.get("bookId")

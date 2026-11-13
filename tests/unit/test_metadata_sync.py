@@ -1,6 +1,7 @@
 """Unit tests for Session 07 — Metadata Sync (Rating, Bookmark, Annotation, Dedupe, Cursor, Outbox)."""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,6 +18,7 @@ from grimmlink_adapter.models.internal import OutboxAction
 from grimmlink_adapter.official.client import OfficialGrimmoryClient
 from grimmlink_adapter.official.exceptions import OfficialBadResponseError, OfficialTimeoutError
 from grimmlink_adapter.security.auth_extractor import ClientCredentials
+from grimmlink_adapter.services import metadata_service
 from grimmlink_adapter.services.metadata_service import (
     MetadataService,
     is_valid_cfi,
@@ -687,6 +689,84 @@ async def test_route_path_recovers_timeout_after_possible_bookmark_commit(
 
 
 @pytest.mark.asyncio
+async def test_create_conflict_adopts_only_one_exact_existing_bookmark(
+    mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.metadata_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    client = OfficialGrimmoryClient()
+    client.create_bookmark = AsyncMock(  # type: ignore[method-assign]
+        side_effect=OfficialBadResponseError("Conflict", status_code=409, method="POST")
+    )
+    client.get_bookmarks_for_book = AsyncMock(return_value=[{  # type: ignore[method-assign]
+        "id": 731,
+        "title": "Same bookmark",
+        "notes": "A note",
+        "pageNumber": 12,
+        "cfi": "epubcfi(/6/2!/4/2:0)",
+        "color": None,
+    }])
+    service = MetadataService(official_client=client)
+
+    response = await service.sync_metadata(
+        GrimmlinkMetadataSyncRequest(
+            bookId=73,
+            bookmarks=[GrimmlinkBookmarkPayload(
+                dedupeKey="bm:conflict-route",
+                title="Same bookmark",
+                notes="A note",
+                page=12,
+                location=GrimmlinkLocationPayload(cfi="epubcfi(/6/2!/4/2:0)"),
+            )],
+        ),
+        creds=mock_creds,
+    )
+
+    assert response.results.bookmarks[0].status == "SUCCESS"
+    assert response.results.bookmarks[0].id == "bm-731"
+    assert response.appliedCount == 1
+    assert await MetadataSyncStore.get_remote_id("42", 73, "bookmark", "bm:conflict-route") == 731
+    client.get_bookmarks_for_book.assert_awaited_once_with(73, verified_bearer)
+
+
+@pytest.mark.asyncio
+async def test_create_conflict_does_not_guess_between_multiple_existing_bookmarks(
+    mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.metadata_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    client = OfficialGrimmoryClient()
+    client.create_bookmark = AsyncMock(  # type: ignore[method-assign]
+        side_effect=OfficialBadResponseError("Conflict", status_code=409, method="POST")
+    )
+    duplicate = {
+        "id": 732,
+        "title": "Same bookmark",
+        "notes": None,
+        "pageNumber": 12,
+        "cfi": None,
+        "color": None,
+    }
+    client.get_bookmarks_for_book = AsyncMock(return_value=[duplicate, {**duplicate, "id": 733}])  # type: ignore[method-assign]
+    service = MetadataService(official_client=client)
+
+    with pytest.raises(OfficialBadResponseError):
+        await service.sync_metadata(
+            GrimmlinkMetadataSyncRequest(
+                bookId=73,
+                bookmarks=[GrimmlinkBookmarkPayload(dedupeKey="bm:ambiguous", title="Same bookmark", page=12)],
+            ),
+            creds=mock_creds,
+        )
+
+    assert await MetadataSyncStore.get_remote_id("42", 73, "bookmark", "bm:ambiguous") is None
+
+
+@pytest.mark.asyncio
 async def test_cursor_pages_without_loss_and_rejects_cross_scope_reuse(
     mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -766,6 +846,74 @@ async def test_pull_uses_fresh_official_fields_and_preserves_local_unsupported_f
 
 
 @pytest.mark.asyncio
+async def test_epub_bookmark_pull_converts_cfi_to_koreader_xpointer(
+    mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.metadata_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    converter = AsyncMock(return_value="/body/chapter/3")
+    monkeypatch.setattr(metadata_service, "prose_converter", SimpleNamespace(convert=converter), raising=False)
+    client = OfficialGrimmoryClient()
+    client.get_personal_rating = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    client.get_bookmarks_for_book = AsyncMock(return_value=[{  # type: ignore[method-assign]
+        "id": 891,
+        "title": "EPUB bookmark",
+        "notes": None,
+        "pageNumber": 27,
+        "cfi": "epubcfi(/6/8!/4/2:3)",
+        "color": None,
+    }])
+
+    pulled = await MetadataService(official_client=client).pull_metadata(
+        book_id=89,
+        book_hash="verified-epub-hash",
+        item_type="bookmark",
+        creds=mock_creds,
+    )
+
+    assert len(pulled.items) == 1
+    assert pulled.items[0].payload["pos0"] == "/body/chapter/3"
+    assert pulled.items[0].payload["location"]["pos0"] == "/body/chapter/3"
+    assert "positionConversionError" not in pulled.items[0].payload
+    converter.assert_awaited_once_with(
+        "verified-epub-hash", "cfi", "epubcfi(/6/8!/4/2:3)", mock_creds
+    )
+
+
+@pytest.mark.asyncio
+async def test_epub_bookmark_pull_marks_failed_conversion_for_retry(
+    mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "grimmlink_adapter.services.metadata_service.get_official_bearer",
+        AsyncMock(return_value=verified_bearer),
+    )
+    converter = AsyncMock(return_value=None)
+    monkeypatch.setattr(metadata_service, "prose_converter", SimpleNamespace(convert=converter), raising=False)
+    client = OfficialGrimmoryClient()
+    client.get_personal_rating = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    client.get_bookmarks_for_book = AsyncMock(return_value=[{  # type: ignore[method-assign]
+        "id": 892,
+        "title": "EPUB bookmark",
+        "pageNumber": 27,
+        "cfi": "epubcfi(/6/8!/4/2:3)",
+    }])
+
+    pulled = await MetadataService(official_client=client).pull_metadata(
+        book_id=89,
+        book_hash="verified-epub-hash",
+        item_type="bookmark",
+        creds=mock_creds,
+    )
+
+    assert pulled.items[0].payload["positionConversionError"] == "epub_cfi_to_xpointer_failed"
+    assert pulled.items[0].payload["cfi"] == "epubcfi(/6/8!/4/2:3)"
+    converter.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_pull_filters_mapped_bookmarks_and_annotations_by_type(
     mock_creds: ClientCredentials, verified_bearer: VerifiedBearer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -830,4 +978,10 @@ async def test_pull_emits_tombstone_for_confirmed_remote_deletion(
         "42", 77, "bookmark", "bm:deleted-web"
     )
     assert history is not None and history.is_deleted is True
+    # A second reader or a failed first apply must still see the tombstone.
+    retry = await service.pull_metadata(book_id=77, cursor="1970-01-01T00:00:00Z", creds=mock_creds)
+    assert any(item.dedupeKey == "bm:deleted-web" and item.payload == {"deleted": True}
+               for item in retry.items)
+    after_ack = await service.pull_metadata(book_id=77, cursor=retry.nextCursor, creds=mock_creds)
+    assert not any(item.dedupeKey == "bm:deleted-web" for item in after_ack.items)
 

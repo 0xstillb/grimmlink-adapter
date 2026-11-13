@@ -1,6 +1,7 @@
 """Local SQLite cache managers for book hashes, tokens, and multi-shelf ownership."""
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from grimmlink_adapter.models.internal import (
@@ -748,10 +749,10 @@ class MetadataSyncStore:
             await conn.execute(
                 """
                 UPDATE metadata_applied_history
-                SET is_deleted = 1, synced_at = CURRENT_TIMESTAMP
+                SET is_deleted = 1, synced_at = ?
                 WHERE owner_key = ? AND book_id = ? AND item_type = ? AND dedupe_key = ?
                 """,
-                (owner_key, book_id, item_type, dedupe_key),
+                (datetime.now(UTC).isoformat(), owner_key, book_id, item_type, dedupe_key),
             )
             await conn.commit()
 
@@ -807,15 +808,16 @@ class MetadataSyncStore:
         limit: int = 50,
         item_type: str | None = None,
         exclude_device_id: str | None = None,
+        deleted_only: bool = False,
     ) -> list[MetadataDedupeRecord]:
         query = [
             "SELECT owner_key, book_id, item_type, dedupe_key, content_hash, device,",
             "       device_id, source_scale, source_value, official_value, official_id,",
             "       payload_json, is_deleted, synced_at",
             "FROM metadata_applied_history",
-            "WHERE owner_key = ? AND book_id = ? AND is_deleted = 0",
+            "WHERE owner_key = ? AND book_id = ? AND is_deleted = ?",
         ]
-        params: list[Any] = [owner_key, book_id]
+        params: list[Any] = [owner_key, book_id, int(deleted_only)]
         if item_type:
             query.append("AND item_type = ?")
             params.append(item_type)
