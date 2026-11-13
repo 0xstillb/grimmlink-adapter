@@ -1,7 +1,7 @@
 # GrimmLink Adapter v2 — Product & Technical Specification
 
 - **Version:** 1.0.0
-- **Status:** Implemented baseline; deployed-build and real-client verification remain open
+- **Status:** Implemented and released as Adapter `v0.1.18`; Pi deployment of the published GHCR image and real-client E2E remain unverified
 - **Prepared:** 2026-11-07
 - **Target server:** Stock Grimmory, tracking `develop`
 - **Clients:** New GrimmLink KOReader plugin and the existing Readest fork
@@ -333,4 +333,4 @@ No data migration is required for the Adapter's derived caches if they remain re
 - Grimmory open [#2881: indexed XPointer is not converted to CFI](https://github.com/grimmory-tools/grimmory/issues/2881)
 - Grimmory open [#2937: PDF KOReader progress not synced to Web Reader](https://github.com/grimmory-tools/grimmory/issues/2937)
 - [Prose KOReader conversion docs](https://doc.prose-reader.com/koreader)
-- Historical pre-v2 context: [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`PROGRESS_SYNC_STATUS.md`](./PROGRESS_SYNC_STATUS.md), [`MIGRATION_PLAN.md`](./MIGRATION_PLAN.md), and [`Official API parity audit`](../references/OFFICIAL_GRIMMORY_API_PARITY_AUDIT.md)
+- For the retained legacy API mapping, see [`LEGACY_GRIMMLINK_CONTRACT.md`](./LEGACY_GRIMMLINK_CONTRACT.md). Current behavior and release validation are tracked in this specification and [`PARITY_REPORT.md`](./PARITY_REPORT.md).

@@ -98,11 +98,11 @@ HTTP `200` เพียงอย่างเดียวไม่ใช่หล
 - [ ] ยืนยันว่า native XPointer เปลี่ยนแม้ Web Reader CFI ค้าง
 - [ ] ทดสอบ Web Reader หลัง KOReader อ่านเดินหน้า
 - [ ] ทดสอบ Web Reader หลัง KOReader ย้อนกลับบทเก่า
-- [ ] จัดผลเป็น `FAIL — KNOWN ISSUE` จนกว่า Web Reader E2E จะผ่านจริง
+- [ ] จัดผลเป็น `OPEN — NOT RE-TESTED` จนกว่า Web Reader E2E จะผ่านจริง
 - [ ] ห้ามจัด HTTP `200` หรือ percentage เปลี่ยนเป็น Web Reader PASS
 
-ปัญหานี้บันทึกไว้ใน `docs/PROGRESS_SYNC_STATUS.md` และยังไม่อยู่ใน scope
-การแก้ของ test run นี้
+สถานะล่าสุดและหลักฐานของปัญหานี้ให้บันทึกใน `docs/PARITY_REPORT.md`;
+อย่าใช้ log การพัฒนาเก่าแทนผล Web Reader E2E รอบใหม่
 
 ## 8. PDF/fixed-page progress
 

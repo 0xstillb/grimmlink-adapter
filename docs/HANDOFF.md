@@ -1,6 +1,19 @@
 # Inter-Session Handoff & Governance
 
-## Live Pi runtime check — 2026-11-10, after 0.1.18 rollout
+> **Current snapshot: 2026-11-13.** This section is the handoff source of truth. The dated implementation notes below are retained as history; their local “current status” statements describe the state at that date and are superseded by this snapshot.
+
+## Current status — 2026-11-13
+
+| Area | Status | Evidence / boundary |
+| --- | --- | --- |
+| Adapter main | Released as `v0.1.18` at `e14f7ee`; `origin/main` matches. | GitHub Release: https://github.com/0xstillb/grimmlink-adapter/releases/tag/v0.1.18 |
+| Adapter validation and image | PASS. GitHub Actions passed Ruff, Mypy, Python tests, Prose tests, and ARM64 image build/publish. | Run: https://github.com/0xstillb/grimmlink-adapter/actions/runs/43346752578. GHCR tags include `0.1.18` and `latest`. |
+| Adapter metadata changes | Included in the release: replayable bookmark/annotation deletion tombstones; exact-match recovery for unique upstream duplicate-bookmark conflicts; EPUB CFI-to-XPointer conversion on metadata pull, with no guessed location when conversion fails. | Source and regression tests are in the released main commit. This is code/CI evidence, not a substitute for reader E2E. |
+| Pi deployment | Last recorded deployment on 2026-11-13 used the Pi-local image `grimmlink-adapter:metadata-sync-20261113-epub-positions`; it reported Docker `healthy` and `/healthcheck` version `0.1.18`. | The published GHCR release image was not pulled in that deployment. SSH recheck while updating this handoff stopped at host-key verification, so current runtime state is not independently confirmed. |
+| KOReader plugin | Local branch `codex/adapter-v2-client`, commit `0a9f6f5`; Busted passed 252/252. | Not pushed or released. Device E2E for immediate EPUB bookmark display after pull remains unverified. |
+| Readest | Local working tree has uncommitted work. | No Readest build or client E2E is claimed by the Adapter release checks. |
+
+## Historical Pi runtime check — 2026-11-10
 
 - SSH confirmed the Raspberry Pi host `begodev` (`aarch64`) is running `grimmlink-adapter:0.1.18`, image ID `sha256:8c90acf53031e8e0278ea9d49e93107de5d24c6fae8b04317e9c7e8d123edebb`; it was built locally on Pi and is not published to GHCR. Compose backups include `compose.yml.codex-backup-20261110`, `compose.yml.codex-backup-ui-20261110`, `compose.yml.codex-backup-0.1.16-20261110`, and `compose.yml.codex-backup-0.1.17-20261110`.
 - After rollout, Docker reported `running`, `healthy`, and 0 restarts; `/healthcheck` and `/readyz` returned HTTP 200. `/imports` remains read-only and `/app/data` still uses external volume `grimmlink_adapter_data`. No data volume was replaced.
@@ -106,7 +119,6 @@ library 4, not only book 25.
 Sources:
 - [Official KOReader progress response](https://grimmory.org/api/operations/getprogress/)
 - [Official file metadata response](https://grimmory.org/api/operations/getfilemetadata/)
-- references/OFFICIAL_GRIMMORY_API_PARITY_AUDIT.md, section B3
 
 ## 3. Verification Evidence
 

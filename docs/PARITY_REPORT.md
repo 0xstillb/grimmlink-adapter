@@ -3,7 +3,26 @@
 เอกสารนี้เป็นแบบฟอร์มบันทึกผลจาก `docs/E2E_CHECKLIST.md` ห้ามใส่ password,
 token, refresh token หรือ MD5 key
 
-## Latest live Pi deployment check — 2026-11-10
+## Current release and verification status — 2026-11-13
+
+| Area | Result | Evidence / limits |
+| --- | --- | --- |
+| Adapter release | PASS | `v0.1.18`, commit `e14f7ee`; [GitHub Release](https://github.com/0xstillb/grimmlink-adapter/releases/tag/v0.1.18). |
+| CI and ARM64 image | PASS | [Release workflow](https://github.com/0xstillb/grimmlink-adapter/actions/runs/43346752578): Ruff, Mypy, Python tests, Prose tests, and ARM64 image build/publish passed. GHCR publishes `0.1.18` and `latest`. |
+| Changes covered by release | PASS — automated | Metadata pull converts valid EPUB CFI to KOReader XPointer when possible; deletion tombstones remain replayable; duplicate bookmark conflict recovery adopts only one exact match. CI proves automated checks, not device behavior. |
+| Pi runtime | LAST DEPLOY CHECK: PASS; CURRENT STATE NOT RECHECKED | The 2026-11-13 Pi-local image `grimmlink-adapter:metadata-sync-20261113-epub-positions` was recorded as Docker `healthy`; `/healthcheck` reported version `0.1.18`. This was not the GHCR release image. SSH recheck while updating this report failed host-key verification, so present health and whether it was subsequently changed are unknown. |
+| KOReader plugin | AUTOMATED PASS / DEVICE E2E NOT VERIFIED | Local plugin commit `0a9f6f5` passed Busted 252/252; it is not pushed/released, and EPUB bookmark appearance after pull still needs a device test. |
+| Readest | NOT VERIFIED HERE | The Readest working tree has uncommitted changes; no build or client E2E result is included in this Adapter release report. |
+| Reader-to-Grimmory metadata E2E | NOT RUN IN THIS RELEASE | No new writes against a live or disposable Grimmory library were performed as part of the 2026-11-13 release validation. |
+
+The release run initially exposed one Mypy type error; a type guard was added,
+then the final main and tag workflows passed. The failed attempt was not released.
+
+## Historical live Pi deployment check — 2026-11-10
+
+This table records an earlier Pi state observed on that date. A later Pi-local
+deployment was recorded on 2026-11-13 in the current status table above. This
+historical table predates publication of the `v0.1.18` GHCR image.
 
 การตรวจนี้ยืนยันสถานะ runtime บน Pi เท่านั้น ไม่ใช่ผลทดสอบ parity/E2E
 
@@ -109,6 +128,14 @@ remains an E2E checklist item.
 - Live smoke test: Metadata page served successfully, auto-session `200`, local Metadata route `200`, Reader API route `403`; the test session was revoked. Final Pi checks: container `running`/`healthy`, restart count `0`, `/healthcheck` `200`, `/readyz` `200`.
 - Local pytest collection remains unavailable because `.venv` is missing `cryptography`; Ruff, mypy on changed auth/API modules, inline JavaScript syntax, and deployment smoke checks passed. First-time enrollment/reconnect and full Readest/KOReader sync remain feature E2E items.
 
+## Historical parity run — 2026-09-29
+
+The remaining run metadata, detailed results, data reconciliation, blockers,
+and final decision below belong to this 2026-09-29 staging-gate snapshot. They
+are retained as historical evidence and do not describe the 2026-11-13 release
+or current Pi deployment. Use the current status table at the top for release
+and validation state.
+
 ## Run metadata
 
 | Field | Value |
@@ -174,7 +201,7 @@ local Windows permissions. Neither warning failed a test.
 
 | Issue | Classification | Impact | Evidence | Follow-up |
 | --- | --- | --- | --- | --- |
-| Official XPointer → EPUB CFI conversion may leave Web Reader stale | FAIL — KNOWN ISSUE | Native KOReader sync may pass while Web Reader remains at an older CFI | `docs/PROGRESS_SYNC_STATUS.md` | Not fixed in this test run |
+| Official XPointer → EPUB CFI conversion may leave Web Reader stale | OPEN — NOT RE-TESTED | Native KOReader sync may pass while Web Reader remains at an older CFI | Kept as an open check in `docs/E2E_CHECKLIST.md`; no Web Reader E2E in the 2026-11-13 release run | Re-run the Web Reader projection checks in `docs/E2E_CHECKLIST.md` before changing this status |
 
 ## Data integrity reconciliation
 
