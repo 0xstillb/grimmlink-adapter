@@ -1140,7 +1140,7 @@ class MetadataService:
                 if payload.get("pos0") or location.get("pos0"):
                     continue
                 cfi = payload.get("cfi") or location.get("cfi")
-                if not is_valid_cfi(cfi):
+                if not isinstance(cfi, str) or not is_valid_cfi(cfi):
                     continue
                 try:
                     xpointer = await prose_converter.convert(book_hash, "cfi", cfi, creds)
